@@ -1,5 +1,6 @@
 import React from 'react';
 import { MapContainer, TileLayer, 
+        useMapEvents,
         // Marker, 
         // Popup 
     } from 'react-leaflet';
@@ -14,7 +15,17 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-const Map = () => {
+const ClickHandler = ({ onMapClick }) => {
+    useMapEvents({
+      click(e) {
+        const { lat, lng } = e.latlng;
+        onMapClick(lat, lng);
+      },
+    });
+    return null;
+  };
+
+const Map = ( { onMapClick } ) => {
     return (
         <MapContainer
             center={[0, 0]}
@@ -26,10 +37,8 @@ const Map = () => {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+            <ClickHandler onMapClick={onMapClick}/>
+
         </MapContainer>
     );
 };
