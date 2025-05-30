@@ -16,5 +16,5 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git remote add hf https://HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/DebasishDhal99/trading-metaverse
+          git remote add hf https://HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/DebasishDhal99/map-wikireader
           git push --force hf master:main
