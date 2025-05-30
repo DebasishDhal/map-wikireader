@@ -1,0 +1,58 @@
+# version: '3.10.11'
+
+services:
+  map-wikiread:
+    build: 
+      context: .
+      dockerfile: Dockerfile  # Use the Dockerfile in the current directory
+    ports:
+      - "8004:8000"  # Expose port 8004 on host to port 8000 in the container
+    command: uvicorn main:app --host 0.0.0.0 --reload      
+    # command: /bin/sh -c "pip install -r requirements.txt && uvicorn main:app --host 0.0.0.0 --reload"
+    environment:
+      - MONGODB_URL=mongodb://mongodb-wikiread:27017
+      - DATABASE_NAME=wikiread
+    volumes:
+      - .:/app  # Mount the current directory to /app in the container
+    depends_on:
+      - mongodb-wikiread  # Ensure MongoDB starts before the backend
+    networks:
+      - wikiread_network
+
+  mongodb-wikiread:
+    image: mongo:latest
+    ports:
+      - "27017:27017"  # Expose MongoDB on port 27017. Decided not to use another port.
+    container_name: mongodb-wikiread
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=user
+      - MONGO_INITDB_ROOT_PASSWORD=root
+    volumes:
+      - mongodb_data:/data/db  # Use a volume for persistent MongoDB data
+    networks:
+      - wikiread_network
+
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - REACT_APP_API_URL=http://localhost:8004
+    depends_on:
+      - map-wikiread
+    networks:
+      - wikiread_network
+
+networks:
+  wikiread_network:
+    driver: bridge  # Create a bridge network to connect the backend and MongoDB
+
+volumes:
+  mongodb_data:
+    driver: local
