@@ -8,3 +8,4 @@ pyjwt == 2.9.0
 pytest == 8.3.4
 geopy == 2.4.1
 gpxpy == 1.6.2
+requests == 2.30.0
