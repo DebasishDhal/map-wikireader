@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, 
+    // useCallback
+ } from 'react';
 import { MapContainer, TileLayer, 
         useMapEvents,
         Marker, 
@@ -26,20 +28,35 @@ const ClickHandler = ({ onMapClick }) => {
     return null;
   };
 
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8004';
+console.log(BACKEND_URL);
 
-
-const Map = ( { onMapClick } ) => {
+const Map = ( { onMapClick, searchQuery } ) => {
+    const [markerPosition, setMarkerPosition] = useState([0,0]);
     const [wikiContent, setWikiContent] = useState(null);
     const fetchWiki = async (pageName) => {
-        const res = await fetch(`http://localhost:8004/wiki/${pageName}`);
-        const data = await res.json();
-        setWikiContent(data);
+        try{
+            const res = await fetch(`${BACKEND_URL}/wiki/${pageName}`);
+            const data = await res.json();
+            setWikiContent(data);
+            if (data && data.latitude && data.longitude){
+                setMarkerPosition([data.latitude, data.longitude]);
+            }
+        }
+        catch (error) {
+            console.error("Error fetching Wikipedia content:", error);
+        }
       };
-    const markerPosition = [21.2514, 81.6296];
+    // const markerPosition = [21.2514, 81.6296];
+    useEffect(() => {
+        if (searchQuery) {
+            fetchWiki(searchQuery);
+        }
+    }, [searchQuery]);
 
     return (
         <MapContainer
-            center={[0, 0]}
+            center={markerPosition}
             zoom={2}
             style={{ height: '100vh', width: '100%' }}
         >
@@ -49,22 +66,18 @@ const Map = ( { onMapClick } ) => {
             />
             
             <ClickHandler onMapClick={onMapClick}/>
-            <Marker position={markerPosition} eventHandlers={{
-        click: () => fetchWiki("Raipur"),
-      }}>
-        <Popup minWidth={250}>
-          {wikiContent ? (
-            <>
-              <strong>{wikiContent.title}</strong><br />
-              <p style={{ fontSize: '12px' }}>{wikiContent.content}</p>
-            </>
-          ) : (
-            "Click marker to load Wikipedia content"
-          )}
-        </Popup>
-      </Marker>
-
-            {/* Example marker */}
+            <Marker position={markerPosition}>
+                <Popup minWidth={250}>
+                    {wikiContent ? (
+                        <>
+                            <strong>{wikiContent.title}</strong><br />
+                            <p style={{ fontSize: '12px' }}>{wikiContent.content}</p>
+                        </>
+                    ) : (
+                        "Search for a location to see information"
+                    )}
+                </Popup>
+            </Marker>
         </MapContainer>
     );
 };
