@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, 
         useMapEvents,
-        // Marker, 
-        // Popup 
+        Marker, 
+        Popup ,
+        // useMap
     } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -25,7 +26,17 @@ const ClickHandler = ({ onMapClick }) => {
     return null;
   };
 
+
+
 const Map = ( { onMapClick } ) => {
+    const [wikiContent, setWikiContent] = useState(null);
+    const fetchWiki = async (pageName) => {
+        const res = await fetch(`http://localhost:8004/wiki/${pageName}`);
+        const data = await res.json();
+        setWikiContent(data);
+      };
+    const markerPosition = [21.2514, 81.6296];
+
     return (
         <MapContainer
             center={[0, 0]}
@@ -38,7 +49,22 @@ const Map = ( { onMapClick } ) => {
             />
             
             <ClickHandler onMapClick={onMapClick}/>
+            <Marker position={markerPosition} eventHandlers={{
+        click: () => fetchWiki("Raipur"),
+      }}>
+        <Popup minWidth={250}>
+          {wikiContent ? (
+            <>
+              <strong>{wikiContent.title}</strong><br />
+              <p style={{ fontSize: '12px' }}>{wikiContent.content}</p>
+            </>
+          ) : (
+            "Click marker to load Wikipedia content"
+          )}
+        </Popup>
+      </Marker>
 
+            {/* Example marker */}
         </MapContainer>
     );
 };
