@@ -28,7 +28,7 @@ const ClickHandler = ({ onMapClick }) => {
     return null;
   };
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8004';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8004';
 console.log(BACKEND_URL);
 
 const ResizeHandler = ({ trigger }) => {
