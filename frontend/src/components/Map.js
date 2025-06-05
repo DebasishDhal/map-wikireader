@@ -42,7 +42,7 @@ const Map = ( { onMapClick, searchQuery } ) => {
     const [markerPosition, setMarkerPosition] = useState([0,0]);
     const [wikiContent, setWikiContent] = useState(null);
     const [panelSize, setPanelSize] = useState('half');
-    const [wikiWidth, setWikiWidth] = useState(50);
+    const [wikiWidth, setWikiWidth] = useState(20);
     const isDragging = useRef(false);
     const startX = useRef(0);
     const startWidth = useRef(0);
@@ -109,6 +109,7 @@ const Map = ( { onMapClick, searchQuery } ) => {
             if (prev === 'full')  return 'half';
             return 'half';
         });
+        setWikiWidth(20);
     };
 
     return (
