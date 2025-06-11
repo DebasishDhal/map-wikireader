@@ -43,6 +43,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const [wikiContent, setWikiContent] = useState(null);
     const [panelSize, setPanelSize] = useState('half');
     const [wikiWidth, setWikiWidth] = useState(20);
+    const [iframeSrc, setIframeSrc] = useState(''); 
     const isDragging = useRef(false);
     const startX = useRef(0);
     const startWidth = useRef(0);
@@ -97,14 +98,38 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                 if (data && data.latitude && data.longitude) {
                   setMarkerPosition([data.latitude, data.longitude]);
                 }
-              } else {
+              } else if (contentType === 'full') {
                 setWikiContent({
                   title: data.title,
                   content: data.content
                 });
+
+                const htmlContent = `
+                    <!DOCTYPE html>
+                    <html>
+                        <head>
+                            <style>
+                                body { font-family: Arial, sans-serif; padding: 20px; }
+                                img { max-width: 100%; }
+                            </style>
+                        </head>
+                        <body>
+                            ${data.content}
+                        </body>
+                    </html>
+                `;
+                const blob = new Blob([htmlContent], { type: 'text/html' });
+                const blobUrl = URL.createObjectURL(blob);
+                setIframeSrc(blobUrl);
+                // const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent);
+                // setIframeSrc(dataUrl);;
                 if (data && data.latitude && data.longitude) {
                   setMarkerPosition([data.latitude, data.longitude]);
                 }
+              }
+              else {
+                console.log("Invalid content type:", contentType);
+                setWikiContent(null);
               }
             } catch (error) {
               console.error("Error fetching Wikipedia content:", error);
@@ -144,12 +169,24 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                             <h2>{wikiContent?.title || 'Search for a location'}</h2>
                         </div>
                         {wikiContent ? (
-                            <div>
+                        <div>
+                            {contentType === 'full' ? (
+                                <iframe
+                                    src={iframeSrc}
+                                    style={{
+                                        width: '100%',
+                                        height: 'calc(100vh - 100px)',
+                                        border: 'none'
+                                    }}
+                                    title="Wikipedia Page"
+                                />
+                            ) : (
                                 <p>{wikiContent.content}</p>
-                            </div>
-                        ) : (
-                            <p>Search for a location to see Wikipedia content</p>
-                        )}
+                            )}
+                        </div>
+                    ) : (
+                        <p>Search for a location to see Wikipedia content</p>
+                    )}
                     </div>
                     <div
                         onMouseDown={handleMouseDown}
@@ -185,7 +222,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                 <MapContainer
                     center={markerPosition}
                     zoom={2}
-                    style={{ height: '100%', width: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                    style={{ height: '100%', width: '100%' }}
                 >
                     <ResizeHandler trigger={wikiWidth} />
                     <TileLayer
