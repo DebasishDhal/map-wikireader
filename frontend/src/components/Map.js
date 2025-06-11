@@ -102,6 +102,9 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                   title: data.title,
                   content: data.content
                 });
+                if (data && data.latitude && data.longitude) {
+                  setMarkerPosition([data.latitude, data.longitude]);
+                }
               }
             } catch (error) {
               console.error("Error fetching Wikipedia content:", error);
