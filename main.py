@@ -52,9 +52,16 @@ def search_wiki(full_page: str):
                 content={"error": "Page not found"},
                 status_code=404
             )
-    
+
+        coords = loc.geocode(full_page)
+
         return JSONResponse(
-            content={"title": full_page, "content": str(response.text)},
+            content={
+                        "title": full_page, 
+                        "content": str(response.text),
+                        "latitude": coords.latitude if coords else None,
+                        "longitude": coords.longitude if coords else None
+                    },
             status_code=200
         )
     except Exception as e:
