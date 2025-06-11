@@ -11,6 +11,7 @@ import React, { useState,
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
+  const [contentType, setContentType] = useState('summary'); // 'summary' or 'full'
 
   const handleMapClick = (lat, lng) => {
     console.log(`Map clicked at latitude: ${lat}, longitude: ${lng}`);
@@ -32,10 +33,22 @@ function App() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+          <select 
+            value={contentType}
+            onChange={(e) => setContentType(e.target.value)}
+            style={{ margin: '0 10px' }}
+          >
+            <option value="summary">Summary</option>
+            <option value="full">Full Content</option>
+          </select>
           <button type="submit">Search</button>
         </form>
       </div>
-      <Map onMapClick={handleMapClick} searchQuery={submittedQuery} />
+      <Map 
+        onMapClick={handleMapClick} 
+        searchQuery={submittedQuery}
+        contentType={contentType}
+      />
     </div>
   );
 }
