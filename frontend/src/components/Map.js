@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef
-    // useCallback
+import React, { useState, useEffect, useRef,
+    useCallback
  } from 'react';
 import { MapContainer, TileLayer, 
         useMapEvents,
@@ -38,7 +38,7 @@ const ResizeHandler = ({ trigger }) => {
     }, [trigger, map]);
     return null;
 };
-const Map = ( { onMapClick, searchQuery } ) => {
+const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const [markerPosition, setMarkerPosition] = useState([0,0]);
     const [wikiContent, setWikiContent] = useState(null);
     const [panelSize, setPanelSize] = useState('half');
@@ -83,25 +83,36 @@ const Map = ( { onMapClick, searchQuery } ) => {
     }, []);
 
 
-    const fetchWiki = async (pageName) => {
+    const fetchWiki = useCallback(async (pageName) => {
         try{
-            const res = await fetch(`${BACKEND_URL}/wiki/${pageName}`);
+            const endpoint = contentType === 'summary' 
+                ? `${BACKEND_URL}/wiki/${pageName}`
+                : `${BACKEND_URL}/wiki/search/${pageName}`;
+
+            const res = await fetch(endpoint);
             const data = await res.json();
-            setWikiContent(data);
-            if (data && data.latitude && data.longitude){
-                setMarkerPosition([data.latitude, data.longitude]);
+
+            if (contentType === 'summary') {
+                setWikiContent(data);
+                if (data && data.latitude && data.longitude) {
+                  setMarkerPosition([data.latitude, data.longitude]);
+                }
+              } else {
+                setWikiContent({
+                  title: data.title,
+                  content: data.content
+                });
+              }
+            } catch (error) {
+              console.error("Error fetching Wikipedia content:", error);
             }
-        }
-        catch (error) {
-            console.error("Error fetching Wikipedia content:", error);
-        }
-      };
+          }, [contentType]);
     // const markerPosition = [21.2514, 81.6296];
     useEffect(() => {
         if (searchQuery) {
             fetchWiki(searchQuery);
         }
-    }, [searchQuery]);
+    }, [searchQuery, fetchWiki]);
 
     const togglePanel = () => {
         setPanelSize(prev => {

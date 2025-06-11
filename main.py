@@ -42,3 +42,23 @@ async def get_wiki_page(page_name: str):
         },
         status_code=200
     )
+
+@app.get("/wiki/search/{full_page}")
+def search_wiki(full_page: str):
+    response = requests.get(f"https://en.wikipedia.org/wiki/{full_page}", timeout=10)
+    try:
+        if response.status_code != 200:
+            return JSONResponse(
+                content={"error": "Page not found"},
+                status_code=404
+            )
+    
+        return JSONResponse(
+            content={"title": full_page, "content": str(response.text)},
+            status_code=200
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e), 'response': str(response)},
+            status_code=500
+        )
