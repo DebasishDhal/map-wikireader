@@ -112,6 +112,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 body { font-family: Arial, sans-serif; padding: 20px; }
                                 img { max-width: 100%; }
                             </style>
+                            <base href="https://en.wikipedia.org">"
+                            <!-- The upper line is added so that relative links in the Wikipedia content work correctly. -->
                         </head>
                         <body>
                             ${data.content}
