@@ -86,9 +86,19 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
 
     const fetchWiki = useCallback(async (pageName) => {
         try{
-            const endpoint = contentType === 'summary' 
-                ? `${BACKEND_URL}/wiki/${pageName}`
-                : `${BACKEND_URL}/wiki/search/${pageName}`;
+            let endpoint;
+            if (contentType === 'summary') {
+                endpoint = `${BACKEND_URL}/wiki/${pageName}`;
+            }
+            else if (contentType === 'full') {
+                endpoint = `${BACKEND_URL}/wiki/search/${pageName}`;
+            }
+
+            else {
+                console.log("Invalid content type:", contentType);
+                setWikiContent(null);
+                return;
+            }
 
             const res = await fetch(endpoint);
             const data = await res.json();
@@ -233,6 +243,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     />
                     <ClickHandler onMapClick={onMapClick}/>
                     <Marker position={markerPosition}>
+                        {contentType === 'summary' && (
                         <Popup minWidth={250}>
                             {wikiContent ? (
                                 <>
@@ -243,6 +254,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 "Search for a location to see information"
                             )}
                         </Popup>
+                        )}
                     </Marker>
                 </MapContainer>
                 {panelSize === 'closed' && (
