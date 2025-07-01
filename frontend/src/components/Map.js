@@ -10,8 +10,13 @@ import { MapContainer, TileLayer,
         Tooltip
     } from 'react-leaflet';
 import L from 'leaflet';
-
+// import {*} from 'geodesy';
+// Test import of geodesy
 import 'leaflet/dist/leaflet.css';
+import  generateGeodesicPoints  from '../utils/mapUtils';
+
+// Haversine-based geodesic interpolator
+
 
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -304,12 +309,12 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
 
                     {/* Polyline if 2 points are selected */}
                     {geoPoints.length === 2 && (
-                    <Polyline
+                    <Polyline 
                         key={geoPoints.map(pt => `${pt.lat},${pt.lon}`).join('-')}
-                        positions={[
-                            [geoPoints[0].lat, geoPoints[0].lon],
-                            [geoPoints[1].lat, geoPoints[1].lon]
-                        ]}
+                        positions={generateGeodesicPoints(
+                            geoPoints[0].lat, geoPoints[0].lon,
+                            geoPoints[1].lat, geoPoints[1].lon
+                        )}
                         pathOptions={{ color: '#1976d2', weight: 4 }}
                     >
                         {geoDistance !== null && (
