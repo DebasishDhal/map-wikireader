@@ -1,5 +1,5 @@
 // Haversine-based geodesic interpolator
-function generateGeodesicPoints(lat1, lon1, lat2, lon2, numPoints = 128) {
+function generateGeodesicPoints(lat1, lon1, lat2, lon2, numPoints = 512) {
     /**
      * Generates a series of points along the geodesic path between two geographic coordinates, using Haversine function.
         * @returns {Array} An array of points, each represented as [latitude, longitude].
