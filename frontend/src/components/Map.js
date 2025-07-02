@@ -55,6 +55,9 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const [geoPoints, setGeoPoints] = useState([]);
     const [geoDistance, setGeoDistance] = useState(null);
 
+    const [geoSidebarOpen, setGeoSidebarOpen] = useState(false);
+    const [geoUnit, setGeoUnit] = useState('km');
+
     const handleMouseDown = (e) => {
         isDragging.current = true;
         startX.current = e.clientX;
@@ -188,17 +191,18 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                 lon1: updatedPoints[0].lon,
                 lat2: updatedPoints[1].lat,
                 lon2: updatedPoints[1].lon,
-                unit: 'km',
+                unit: geoUnit,
               }),
             });
             const data = await res.json();
             setGeoDistance(data.distance);
+            setGeoSidebarOpen(true);
           } catch (err) {
             console.error('Failed to fetch distance:', err);
             setGeoDistance(null);
           }
         }
-      }, [geoPoints]);
+      }, [geoPoints, geoUnit]);
 
     return (
         <div ref={containerRef} style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden' }}>
@@ -279,32 +283,34 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                     <ClickHandler onClick={handleGeoClick} />
-                        {markerPosition && ( // Getting rid of default marker upon start.
-                            <Marker position={markerPosition}>
-                                {contentType === 'summary' && (
-                                <Popup minWidth={250}>
-                                    {wikiContent ? (
-                                        <>
-                                            <strong>{wikiContent.title}</strong><br />
-                                            <p style={{ fontSize: '12px' }}>{wikiContent.content}</p>
-                                        </>
-                                    ) : (
-                                        "Search for a location to see information"
-                                    )}
-                                </Popup>
+                    {markerPosition && (
+                        <Marker position={markerPosition}>
+                            {contentType === 'summary' && (
+                            <Popup minWidth={250}>
+                                {wikiContent ? (
+                                    <>
+                                        <strong>{wikiContent.title}</strong><br />
+                                        <p style={{ fontSize: '12px' }}>{wikiContent.content}</p>
+                                    </>
+                                ) : (
+                                    "Search for a location to see information"
                                 )}
-                            </Marker>
-                        )}
-                    {geoPoints.map((pt, index) => (
+                            </Popup>
+                            )}
+                        </Marker>
+                    )}
+
+                    {/* Only show geodistance markers/polyline if sidebar is open */}
+                    {geoSidebarOpen && geoPoints.map((pt, index) => (
                         <Marker key={`geo-${index}`} position={[pt.lat, pt.lon]}>
                             <Popup>
                                 Point {index + 1}: {pt.lat.toFixed(4)}, {pt.lon.toFixed(4)}
                             </Popup>
-                    </Marker>
+                        </Marker>
                     ))}
 
-                    {/* Polyline if 2 points are selected */}
-                    {geoPoints.length === 2 && (
+                    {/* Polyline if 2 points are selected and sidebar is open */}
+                    {geoSidebarOpen && geoPoints.length === 2 && (
                     <Polyline 
                         key={geoPoints.map(pt => `${pt.lat},${pt.lon}`).join('-')}
                         positions={generateGeodesicPoints(
@@ -330,7 +336,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 boxShadow: 'none',
                                 padding: 0
                             }}>
-                                {geoDistance.toFixed(2)} km
+                                {geoDistance.toFixed(2)} {geoUnit}
                             </span>
                         </Tooltip>
                         )}
@@ -338,6 +344,101 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     )}
 
                 </MapContainer>
+
+                {/* Geo Tools Button */}
+                {!geoSidebarOpen && (
+                    <button
+                        onClick={() => setGeoSidebarOpen(true)}
+                        style={{
+                            position: 'absolute',
+                            top: 12,
+                            right: 12,
+                            zIndex: 1000,
+                            padding: '6px 12px',
+                            backgroundColor: '#1976d2',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Geo Tools
+                    </button>
+                )}
+
+                {/* Geo Sidebar */}
+                {geoSidebarOpen && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 24,
+                        right: 24,
+                        width: 280,
+                        background: 'white',
+                        borderRadius: 10,
+                        boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
+                        zIndex: 2000,
+                        padding: 20,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 16,
+                        border: '1px solid #eee'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <strong>Geodistance</strong>
+                            <button
+                                onClick={() => {
+                                    setGeoSidebarOpen(false);
+                                    setGeoPoints([]);
+                                    setGeoDistance(null);
+                                }}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    fontSize: 18,
+                                    cursor: 'pointer',
+                                    color: '#888'
+                                }}
+                                title="Close"
+                            >×</button>
+                        </div>
+                        <div>
+                            <label style={{ fontWeight: 500, marginRight: 8 }}>Unit:</label>
+                            <select
+                                value={geoUnit}
+                                onChange={e => setGeoUnit(e.target.value)}
+                                style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+                            >
+                                <option value="km">Kilometers</option>
+                                <option value="mi">Miles</option>
+                            </select>
+                        </div>
+                        {geoDistance !== null && (
+                            <div style={{ fontSize: 20, fontWeight: 600, color: '#1976d2' }}>
+                                {geoDistance.toFixed(2)} {geoUnit}
+                            </div>
+                        )}
+                        <button
+                            onClick={() => {
+                                setGeoSidebarOpen(false);
+                                setGeoPoints([]);
+                                setGeoDistance(null);
+                            }}
+                            style={{
+                                marginTop: 8,
+                                padding: '6px 0',
+                                borderRadius: 4,
+                                border: '1px solid #1976d2',
+                                background: '#1976d2',
+                                color: 'white',
+                                fontWeight: 500,
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Clear & Collapse
+                        </button>
+                    </div>
+                )}
+
                 {panelSize === 'closed' && (
                     <button 
                         onClick={togglePanel}
