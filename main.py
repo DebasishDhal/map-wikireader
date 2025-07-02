@@ -1,13 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
-# from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import requests
 from geopy.geocoders import Nominatim
+import geopy.distance
 
 app = FastAPI()
 
 loc = Nominatim(user_agent="GetLoc")
+
+class Geodistance(BaseModel):
+    lat1: float = Field(..., ge=-90, le=90)
+    lon1: float = Field(..., ge=-180, le=180)
+    lat2: float = Field(..., ge=-90, le=90)
+    lon2: float = Field(..., ge=-180, le=180)
+    unit: str = "km"
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,3 +77,40 @@ def search_wiki(full_page: str):
             content={"error": str(e), 'response': str(response)},
             status_code=500
         )
+
+
+@app.post("/geodistance")
+def get_geodistance(payload: Geodistance):
+    lat1, lon1 = payload.lat1, payload.lon1
+    lat2, lon2 = payload.lat2, payload.lon2
+    unit = payload.unit
+
+    try:
+        distance_km = geopy.distance.distance((lat1, lon1), (lat2, lon2)).km
+        if unit == "km":
+            distance = distance_km
+        elif unit == "mi":
+            distance = distance_km * 0.621371
+        else:
+            return JSONResponse(
+                content={"error": "Invalid unit"},
+                status_code=400
+            )
+        
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+
+    return JSONResponse(
+        content={
+            "distance": distance,
+            "unit": unit,
+            "lat1": lat1,
+            "lon1": lon1,
+            "lat2": lat2,
+            "lon2": lon2
+        },
+        status_code=200
+    )
