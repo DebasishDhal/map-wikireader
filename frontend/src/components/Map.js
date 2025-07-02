@@ -10,13 +10,8 @@ import { MapContainer, TileLayer,
         Tooltip
     } from 'react-leaflet';
 import L from 'leaflet';
-// import {*} from 'geodesy';
-// Test import of geodesy
 import 'leaflet/dist/leaflet.css';
 import  generateGeodesicPoints  from '../utils/mapUtils';
-
-// Haversine-based geodesic interpolator
-
 
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -47,7 +42,7 @@ const ResizeHandler = ({ trigger }) => {
     return null;
 };
 const Map = ( { onMapClick, searchQuery, contentType } ) => {
-    const [markerPosition, setMarkerPosition] = useState([0,0]);
+    const [markerPosition, setMarkerPosition] = useState(null);
     const [wikiContent, setWikiContent] = useState(null);
     const [panelSize, setPanelSize] = useState('half');
     const [wikiWidth, setWikiWidth] = useState(20);
@@ -274,7 +269,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                 overflow: 'hidden'
             }}>
                 <MapContainer
-                    center={markerPosition}
+                    center={markerPosition || [0, 0]} // Default center if no marker position
                     zoom={2}
                     style={{ height: '100%', width: '100%' }}
                 >
@@ -284,21 +279,22 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                     <ClickHandler onClick={handleGeoClick} />
-                    <Marker position={markerPosition}>
-                        {contentType === 'summary' && (
-                        <Popup minWidth={250}>
-                            {wikiContent ? (
-                                <>
-                                    <strong>{wikiContent.title}</strong><br />
-                                    <p style={{ fontSize: '12px' }}>{wikiContent.content}</p>
-                                </>
-                            ) : (
-                                "Search for a location to see information"
-                            )}
-                        </Popup>
+                        {markerPosition && ( // Getting rid of default marker upon start.
+                            <Marker position={markerPosition}>
+                                {contentType === 'summary' && (
+                                <Popup minWidth={250}>
+                                    {wikiContent ? (
+                                        <>
+                                            <strong>{wikiContent.title}</strong><br />
+                                            <p style={{ fontSize: '12px' }}>{wikiContent.content}</p>
+                                        </>
+                                    ) : (
+                                        "Search for a location to see information"
+                                    )}
+                                </Popup>
+                                )}
+                            </Marker>
                         )}
-                    </Marker>
-
                     {geoPoints.map((pt, index) => (
                         <Marker key={`geo-${index}`} position={[pt.lat, pt.lon]}>
                             <Popup>
