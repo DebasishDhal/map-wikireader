@@ -58,6 +58,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const [geoSidebarOpen, setGeoSidebarOpen] = useState(false);
     const [geoUnit, setGeoUnit] = useState('km');
 
+    const [isGeoMarkerDragging, setIsGeoMarkerDragging] = useState(false);
+
     const distanceCache = useRef({});
 
     const handleMouseDown = (e) => {
@@ -345,12 +347,16 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                             position={[pt.lat, pt.lon]}
                             draggable={true}
                             eventHandlers={{
-                            dragend: (e) => {
-                                const { lat, lng } = e.target.getLatLng();
-                                const updated = [...geoPoints];
-                                updated[index] = { lat, lon: lng };
-                                setGeoPoints(updated); // Triggering the distance fetch via useEffect
-                                }
+                                dragstart: () => {
+                                    setIsGeoMarkerDragging(true);
+                                },
+                                dragend: (e) => {
+                                    const { lat, lng } = e.target.getLatLng();
+                                    const updated = [...geoPoints];
+                                    updated[index] = { lat, lon: lng };
+                                    setGeoPoints(updated); // Triggering the distance fetch via useEffect
+                                    setIsGeoMarkerDragging(false);
+                                    }
                             }}
                         >
                             <Popup>
@@ -360,7 +366,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     ))}
 
                     {/* Polyline if 2 points are selected and sidebar is open */}
-                    {geoSidebarOpen && geoPoints.length === 2 && (
+                    {geoSidebarOpen && geoPoints.length === 2 && !isGeoMarkerDragging && (
                     <Polyline 
                         key={geoPoints.map(pt => `${pt.lat},${pt.lon}`).join('-')}
                         positions={generateGeodesicPoints(
