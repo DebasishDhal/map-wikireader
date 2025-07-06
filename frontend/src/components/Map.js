@@ -231,7 +231,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                 });
                     const data = await res.json();
                     setGeoDistance(data.distance);
-                    distanceCache.current[cacheKey] = data.distance; // Using cachig here, forgot it in first attempt.
+                    distanceCache.current[cacheKey] = data.distance; // Setting up the cache here, forgot it in first attempt.
+                    console.log("Distance fetched via useEffect:", data.distance);
                 }
                 catch (err) {
                     console.error('Failed to fetch distance:', err);
@@ -340,7 +341,18 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
 
                     {/* Only show geodistance markers/polyline if sidebar is open */}
                     {geoSidebarOpen && geoPoints.map((pt, index) => (
-                        <Marker key={`geo-${index}`} position={[pt.lat, pt.lon]}>
+                        <Marker key={`geo-${index}`}
+                            position={[pt.lat, pt.lon]}
+                            draggable={true}
+                            eventHandlers={{
+                            dragend: (e) => {
+                                const { lat, lng } = e.target.getLatLng();
+                                const updated = [...geoPoints];
+                                updated[index] = { lat, lon: lng };
+                                setGeoPoints(updated); // Triggering the distance fetch via useEffect
+                                }
+                            }}
+                        >
                             <Popup>
                                 Point {index + 1}: {pt.lat.toFixed(4)}, {pt.lon.toFixed(4)}
                             </Popup>
