@@ -58,6 +58,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const [geoSidebarOpen, setGeoSidebarOpen] = useState(false);
     const [geoUnit, setGeoUnit] = useState('km');
 
+    const distanceCache = useRef({});
+
     const handleMouseDown = (e) => {
         isDragging.current = true;
         startX.current = e.clientX;
@@ -197,6 +199,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
             const data = await res.json();
             setGeoDistance(data.distance);
             setGeoSidebarOpen(true);
+            console.log("Distance fetched:", data.distance);
           } catch (err) {
             console.error('Failed to fetch distance:', err);
             setGeoDistance(null);
@@ -206,6 +209,13 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
 
       useEffect(() => {
         if (geoPoints.length === 2) {
+            const cacheKey = `${geoPoints[0].lat},${geoPoints[0].lon}-${geoPoints[1].lat},${geoPoints[1].lon}-${geoUnit}`;
+            if (distanceCache.current[cacheKey]) {
+                setGeoDistance(distanceCache.current[cacheKey]);
+                console.log("Using cached distance:", distanceCache.current[cacheKey]);
+                return;
+            }
+
             const fetchDistance = async () => {
                 try{
                     const res = await fetch(`${BACKEND_URL}/geodistance`, {
@@ -221,6 +231,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                 });
                     const data = await res.json();
                     setGeoDistance(data.distance);
+                    distanceCache.current[cacheKey] = data.distance; // Using cachig here, forgot it in first attempt.
                 }
                 catch (err) {
                     console.error('Failed to fetch distance:', err);
