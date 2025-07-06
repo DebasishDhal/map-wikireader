@@ -58,6 +58,10 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const [geoSidebarOpen, setGeoSidebarOpen] = useState(false);
     const [geoUnit, setGeoUnit] = useState('km');
 
+    const [isGeoMarkerDragging, setIsGeoMarkerDragging] = useState(false);
+
+    const distanceCache = useRef({});
+
     const handleMouseDown = (e) => {
         isDragging.current = true;
         startX.current = e.clientX;
@@ -197,10 +201,47 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
             const data = await res.json();
             setGeoDistance(data.distance);
             setGeoSidebarOpen(true);
+            console.log("Distance fetched:", data.distance);
           } catch (err) {
             console.error('Failed to fetch distance:', err);
             setGeoDistance(null);
           }
+        }
+      }, [geoPoints, geoUnit]);
+
+      useEffect(() => {
+        if (geoPoints.length === 2) {
+            const cacheKey = `${geoPoints[0].lat},${geoPoints[0].lon}-${geoPoints[1].lat},${geoPoints[1].lon}-${geoUnit}`;
+            if (distanceCache.current[cacheKey]) {
+                setGeoDistance(distanceCache.current[cacheKey]);
+                console.log("Using cached distance:", distanceCache.current[cacheKey]);
+                return;
+            }
+
+            const fetchDistance = async () => {
+                try{
+                    const res = await fetch(`${BACKEND_URL}/geodistance`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            lat1: geoPoints[0].lat,
+                            lon1: geoPoints[0].lon,
+                            lat2: geoPoints[1].lat,
+                            lon2: geoPoints[1].lon,
+                            unit: geoUnit
+                        }),
+                });
+                    const data = await res.json();
+                    setGeoDistance(data.distance);
+                    distanceCache.current[cacheKey] = data.distance; // Setting up the cache here, forgot it in first attempt.
+                    console.log("Distance fetched via useEffect:", data.distance);
+                }
+                catch (err) {
+                    console.error('Failed to fetch distance:', err);
+                    setGeoDistance(null);
+                }
+            };
+            fetchDistance();
         }
       }, [geoPoints, geoUnit]);
 
@@ -302,7 +343,22 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
 
                     {/* Only show geodistance markers/polyline if sidebar is open */}
                     {geoSidebarOpen && geoPoints.map((pt, index) => (
-                        <Marker key={`geo-${index}`} position={[pt.lat, pt.lon]}>
+                        <Marker key={`geo-${index}`}
+                            position={[pt.lat, pt.lon]}
+                            draggable={true}
+                            eventHandlers={{
+                                dragstart: () => {
+                                    setIsGeoMarkerDragging(true);
+                                },
+                                dragend: (e) => {
+                                    const { lat, lng } = e.target.getLatLng();
+                                    const updated = [...geoPoints];
+                                    updated[index] = { lat, lon: lng };
+                                    setGeoPoints(updated); // Triggering the distance fetch via useEffect
+                                    setIsGeoMarkerDragging(false);
+                                    }
+                            }}
+                        >
                             <Popup>
                                 Point {index + 1}: {pt.lat.toFixed(4)}, {pt.lon.toFixed(4)}
                             </Popup>
@@ -310,7 +366,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     ))}
 
                     {/* Polyline if 2 points are selected and sidebar is open */}
-                    {geoSidebarOpen && geoPoints.length === 2 && (
+                    {geoSidebarOpen && geoPoints.length === 2 && !isGeoMarkerDragging && (
                     <Polyline 
                         key={geoPoints.map(pt => `${pt.lat},${pt.lon}`).join('-')}
                         positions={generateGeodesicPoints(
