@@ -204,6 +204,33 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
         }
       }, [geoPoints, geoUnit]);
 
+      useEffect(() => {
+        if (geoPoints.length === 2) {
+            const fetchDistance = async () => {
+                try{
+                    const res = await fetch(`${BACKEND_URL}/geodistance`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            lat1: geoPoints[0].lat,
+                            lon1: geoPoints[0].lon,
+                            lat2: geoPoints[1].lat,
+                            lon2: geoPoints[1].lon,
+                            unit: geoUnit
+                        }),
+                });
+                    const data = await res.json();
+                    setGeoDistance(data.distance);
+                }
+                catch (err) {
+                    console.error('Failed to fetch distance:', err);
+                    setGeoDistance(null);
+                }
+            };
+            fetchDistance();
+        }
+      }, [geoPoints, geoUnit]);
+
     return (
         <div ref={containerRef} style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden' }}>
             {panelSize !== 'closed' && (
