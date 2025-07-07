@@ -68,6 +68,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const [polygonArea, setPolygonArea] = useState(null);
     const [areaUnit, setAreaUnit] = useState('sqm'); // 'sqm', 'sqkm', 'ha', 'acres', 'sqmi'
     
+    const [numberFormat, setNumberFormat] = useState('normal'); // 'normal' | 'scientific'
+
     const handleMouseDown = (e) => {
         isDragging.current = true;
         startX.current = e.clientX;
@@ -434,7 +436,12 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 boxShadow: 'none',
                                 padding: 0
                             }}>
-                                {geoDistance.toFixed(2)} {geoUnit}
+                                {geoDistance !== null
+                                    ? (numberFormat === 'scientific'
+                                        ? geoDistance.toExponential(2)
+                                        : geoDistance.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+                                    ) + ' ' + geoUnit
+                                    : ''}
                             </span>
                         </Tooltip>
                         )}
@@ -461,7 +468,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 icon={L.divIcon({
                                     className: 'area-label',
                                     html: polygonArea !== null
-                                        ? `<div style="background:rgba(255,255,255,0.8);padding:2px 6px;border-radius:4px;color:#1976d2;font-weight:600;">${formatArea(polygonArea, areaUnit)}</div>`
+                                        ? `<div style="background:rgba(255,255,255,0.8);padding:2px 6px;border-radius:4px;color:#1976d2;font-weight:600;">${formatArea(polygonArea, areaUnit, numberFormat)}</div>`
                                         : '',
                                     iconSize: [100, 24],
                                     iconAnchor: [50, 12]
@@ -619,9 +626,23 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                         <option value="mi">Miles</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label style={{ fontWeight: 500, marginRight: 8 }}>Number format:</label>
+                                    <select
+                                        value={numberFormat}
+                                        onChange={e => setNumberFormat(e.target.value)}
+                                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+                                    >
+                                        <option value="normal">Normal</option>
+                                        <option value="scientific">Scientific</option>
+                                    </select>
+                                </div>
                                 {geoDistance !== null && (
                                     <div style={{ fontSize: 20, fontWeight: 600, color: '#1976d2' }}>
-                                        {geoDistance.toFixed(2)} {geoUnit}
+                                        {numberFormat === 'scientific'
+                                            ? geoDistance.toExponential(2)
+                                            : geoDistance.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+                                        }
                                     </div>
                                 )}
                                 <button
@@ -668,7 +689,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 </div>
                                 {polygonArea !== null && (
                                     <div style={{ fontSize: 20, fontWeight: 600, color: '#1976d2' }}>
-                                        {formatArea(polygonArea, areaUnit)}
+                                        {formatArea(polygonArea, areaUnit, numberFormat)}
                                     </div>
                                 )}
                                 <button
@@ -701,6 +722,17 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                         <option value="km2">km²</option>
                                         <option value="ha">ha</option>
                                         <option value="mi2">mi²</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ fontWeight: 500, marginRight: 8 }}>Number format:</label>
+                                    <select
+                                        value={numberFormat}
+                                        onChange={e => setNumberFormat(e.target.value)}
+                                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+                                    >
+                                        <option value="normal">Normal</option>
+                                        <option value="scientific">Scientific</option>
                                     </select>
                                 </div>
                             </>
