@@ -214,7 +214,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
             const cacheKey = `${geoPoints[0].lat},${geoPoints[0].lon}-${geoPoints[1].lat},${geoPoints[1].lon}-${geoUnit}`;
             if (distanceCache.current[cacheKey]) {
                 setGeoDistance(distanceCache.current[cacheKey]);
-                console.log("Using cached distance:", distanceCache.current[cacheKey]);
+                console.log("Using cached distance:", distanceCache.current[cacheKey].toFixed(3));
                 return;
             }
 
@@ -234,16 +234,24 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     const data = await res.json();
                     setGeoDistance(data.distance);
                     distanceCache.current[cacheKey] = data.distance; // Setting up the cache here, forgot it in first attempt.
-                    console.log("Distance fetched via useEffect:", data.distance);
+                    console.log("Using normal distance method:", data.distance.toFixed(3));
                 }
                 catch (err) {
                     console.error('Failed to fetch distance:', err);
                     setGeoDistance(null);
                 }
             };
+
+            if (isGeoMarkerDragging){
+                const timeoutId = setTimeout(() => {
+                    fetchDistance();
+                }, 100); // 100ms timeout, before every backend call during dragging
+                return () => clearTimeout(timeoutId);
+            }
+
             fetchDistance();
         }
-      }, [geoPoints, geoUnit]);
+      }, [geoPoints, geoUnit, isGeoMarkerDragging]);
 
     return (
         <div ref={containerRef} style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden' }}>
@@ -350,6 +358,12 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 dragstart: () => {
                                     setIsGeoMarkerDragging(true);
                                 },
+                                drag: (e) => {
+                                    const { lat, lng } = e.target.getLatLng();
+                                    const updated = [...geoPoints];
+                                    updated[index] = { lat, lon: lng };
+                                    setGeoPoints(updated); // The distance function will be continioust triggered throughout the dragging journey
+                                }                                ,
                                 dragend: (e) => {
                                     const { lat, lng } = e.target.getLatLng();
                                     const updated = [...geoPoints];
@@ -366,7 +380,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     ))}
 
                     {/* Polyline if 2 points are selected and sidebar is open */}
-                    {geoSidebarOpen && geoPoints.length === 2 && !isGeoMarkerDragging && (
+                    {geoSidebarOpen && geoPoints.length === 2 && (
                     <Polyline 
                         key={geoPoints.map(pt => `${pt.lat},${pt.lon}`).join('-')}
                         positions={generateGeodesicPoints(
