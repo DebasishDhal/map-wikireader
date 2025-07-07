@@ -52,7 +52,7 @@ function generateGeodesicPoints(lat1, lon1, lat2, lon2, numPoints = 512) {
  * @param {Array<Array<number>>} coordinates - Array of [lat, lon] pairs in decimal degrees
  * @returns {number} Area in square meters
  */
-function calculatePolygonArea(coordinates) {
+function calculatePolygonArea(coordinates, output_unit = 'sqm') {
     if (!coordinates || coordinates.length < 3) {
         throw new Error('At least 3 coordinates are required');
     }
@@ -98,7 +98,8 @@ function calculatePolygonArea(coordinates) {
     // Convert to actual area using ellipsoid parameters
     const ellipsoidArea = Math.abs(area) * (a * a / 2) * (1 - e2);
     
-    return ellipsoidArea;
+    return ellipsoidArea; // Return area in square meters
+    
 }
 
 
@@ -109,10 +110,26 @@ function getPolygonCentroid(points) {
     return [x / n, y / n];
 }
 
-function formatArea(area) {
-    if (area > 1e6) return (area / 1e6).toFixed(2) + ' km²';
-    if (area > 1e4) return (area / 1e4).toFixed(2) + ' ha';
-    return area.toFixed(2) + ' m²';
+function formatArea(area, unit = 'sqm') {
+
+    if (typeof area !== 'number' || isNaN(area)) {
+        return 'Invalid area';
+    }
+
+    switch (unit) {
+        case "km2":
+            return (area / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' km²';
+        case "ha":
+            return (area / 1e4).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' ha';
+        case "sqm":
+            return area.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' m²';
+        case "acres":
+            return (area / 4046.8564224).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' acres';
+        case "mi2":
+            return (area / 2589988.110336).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' sq mi';
+        default:
+            return area.toFixed(2).toLocaleString() + ' m²'; // Default
+    }
 }
 
 export {generateGeodesicPoints, calculatePolygonArea, getPolygonCentroid, formatArea};
