@@ -66,7 +66,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
 
     const [areaPoints, setAreaPoints] = useState([]);
     const [polygonArea, setPolygonArea] = useState(null);
-
+    const [areaUnit, setAreaUnit] = useState('sqm'); // 'sqm', 'sqkm', 'ha', 'acres', 'sqmi'
+    
     const handleMouseDown = (e) => {
         isDragging.current = true;
         startX.current = e.clientX;
@@ -460,7 +461,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 icon={L.divIcon({
                                     className: 'area-label',
                                     html: polygonArea !== null
-                                        ? `<div style="background:rgba(255,255,255,0.8);padding:2px 6px;border-radius:4px;color:#1976d2;font-weight:600;">${formatArea(polygonArea)}</div>`
+                                        ? `<div style="background:rgba(255,255,255,0.8);padding:2px 6px;border-radius:4px;color:#1976d2;font-weight:600;">${formatArea(polygonArea, areaUnit)}</div>`
                                         : '',
                                     iconSize: [100, 24],
                                     iconAnchor: [50, 12]
@@ -667,7 +668,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 </div>
                                 {polygonArea !== null && (
                                     <div style={{ fontSize: 20, fontWeight: 600, color: '#1976d2' }}>
-                                        {formatArea(polygonArea)}
+                                        {formatArea(polygonArea, areaUnit)}
                                     </div>
                                 )}
                                 <button
@@ -689,6 +690,19 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 >
                                     Clear & Back
                                 </button>
+                                <div>
+                                    <label style={{ fontWeight: 500, marginRight: 8 }}>Unit:</label>
+                                    <select
+                                        value={areaUnit}
+                                        onChange={e => setAreaUnit(e.target.value)}
+                                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+                                    >
+                                        <option value="m2">m²</option>
+                                        <option value="km2">km²</option>
+                                        <option value="ha">ha</option>
+                                        <option value="mi2">mi²</option>
+                                    </select>
+                                </div>
                             </>
                         )}
                     </div>
