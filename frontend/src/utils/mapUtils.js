@@ -1,3 +1,4 @@
+
 // Haversine-based geodesic interpolator
 function generateGeodesicPoints(lat1, lon1, lat2, lon2, numPoints = 512) {
     /**
@@ -44,4 +45,75 @@ function generateGeodesicPoints(lat1, lon1, lat2, lon2, numPoints = 512) {
     return points;
 }
 
-export default generateGeodesicPoints;
+
+
+ /**
+ * Calculate the area enclosed by coordinates using simplified Karney method
+ * @param {Array<Array<number>>} coordinates - Array of [lat, lon] pairs in decimal degrees
+ * @returns {number} Area in square meters
+ */
+function calculatePolygonArea(coordinates) {
+    if (!coordinates || coordinates.length < 3) {
+        throw new Error('At least 3 coordinates are required');
+    }
+    
+    // WGS84 ellipsoid parameters
+    const a = 6378137.0;  // Semi-major axis (meters)
+    const f = 1 / 298.257223563;  // Flattening
+    const e2 = f * (2 - f);  // First eccentricity squared
+    
+    // Ensure polygon is closed
+    const coords = [...coordinates];
+    if (coords[0][0] !== coords[coords.length - 1][0] || 
+        coords[0][1] !== coords[coords.length - 1][1]) {
+        coords.push(coords[0]);
+    }
+    
+    let area = 0;
+    const n = coords.length - 1;
+    
+    // Calculate area using simplified geodesic excess method
+    for (let i = 0; i < n; i++) {
+        const [lat1, lon1] = coords[i];
+        const [lat2, lon2] = coords[i + 1];
+        
+        // Convert to radians
+        const phi1 = lat1 * Math.PI / 180;
+        const phi2 = lat2 * Math.PI / 180;
+        let dL = (lon2 - lon1) * Math.PI / 180;
+        
+        // Normalize longitude difference
+        while (dL > Math.PI) dL -= 2 * Math.PI;
+        while (dL < -Math.PI) dL += 2 * Math.PI;
+        
+        // Geodesic excess contribution
+        const E = 2 * Math.atan2(
+            Math.tan(dL / 2) * (Math.sin(phi1) + Math.sin(phi2)),
+            2 + Math.sin(phi1) * Math.sin(phi2) + Math.cos(phi1) * Math.cos(phi2) * Math.cos(dL)
+        );
+        
+        area += E;
+    }
+    
+    // Convert to actual area using ellipsoid parameters
+    const ellipsoidArea = Math.abs(area) * (a * a / 2) * (1 - e2);
+    
+    return ellipsoidArea;
+}
+
+
+function getPolygonCentroid(points) {
+    // Simple centroid calculation for small polygons
+    let x = 0, y = 0, n = points.length;
+    points.forEach(([lat, lon]) => { x += lat; y += lon; });
+    return [x / n, y / n];
+}
+
+function formatArea(area) {
+    if (area > 1e6) return (area / 1e6).toFixed(2) + ' km²';
+    if (area > 1e4) return (area / 1e4).toFixed(2) + ' ha';
+    return area.toFixed(2) + ' m²';
+}
+
+export {generateGeodesicPoints, calculatePolygonArea, getPolygonCentroid, formatArea};
+    // calculatePolygonArea
