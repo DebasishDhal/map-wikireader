@@ -7,11 +7,12 @@ import { MapContainer, TileLayer,
         Popup ,
         useMap,
         Polyline,
-        Tooltip
+        Tooltip,
+        Polygon
     } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import  generateGeodesicPoints  from '../utils/mapUtils';
+import { generateGeodesicPoints, calculatePolygonArea, getPolygonCentroid, formatArea } from '../utils/mapUtils';
 
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -29,7 +30,7 @@ const ClickHandler = ({ onClick }) => {
       },
     });
     return null;
-  };
+};
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8004';
 console.log(BACKEND_URL);
@@ -56,11 +57,18 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const [geoDistance, setGeoDistance] = useState(null);
 
     const [geoSidebarOpen, setGeoSidebarOpen] = useState(false);
+    const [geoToolMode, setGeoToolMode] = useState("menu"); // "menu" | "distance" | "area"
     const [geoUnit, setGeoUnit] = useState('km');
 
     const [isGeoMarkerDragging, setIsGeoMarkerDragging] = useState(false);
 
     const distanceCache = useRef({});
+
+    const [areaPoints, setAreaPoints] = useState([]);
+    const [polygonArea, setPolygonArea] = useState(null);
+    const [areaUnit, setAreaUnit] = useState('sqm'); // 'sqm', 'sqkm', 'ha', 'acres', 'sqmi'
+    
+    const [numberFormat, setNumberFormat] = useState('normal'); // 'normal' | 'scientific'
 
     const handleMouseDown = (e) => {
         isDragging.current = true;
@@ -176,45 +184,56 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
         setWikiWidth(20);
     };
 
-    const handleGeoClick = useCallback(async (lat, lon) => {
-        const updatedPoints = [...geoPoints, { lat, lon }];
-        if (updatedPoints.length > 2) {
-          updatedPoints.shift(); // keep only two
-        }
-        setGeoPoints(updatedPoints);
-      
-        if (updatedPoints.length === 2) {
-            console.log("Fetching distance");
-          try {
+    const handleMapClick = useCallback(async (lat, lon) => {
+        if (geoToolMode === "distance") {
+            const updatedPoints = [...geoPoints, { lat, lon }];
+            if (updatedPoints.length > 2) {
+              updatedPoints.shift(); // keep only two
+            }
+            setGeoPoints(updatedPoints);
+          
+            if (updatedPoints.length === 2) {
+                console.log("Fetching distance");
+              try {
 
-            const res = await fetch(`${BACKEND_URL}/geodistance`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                lat1: updatedPoints[0].lat,
-                lon1: updatedPoints[0].lon,
-                lat2: updatedPoints[1].lat,
-                lon2: updatedPoints[1].lon,
-                unit: geoUnit,
-              }),
-            });
-            const data = await res.json();
-            setGeoDistance(data.distance);
-            setGeoSidebarOpen(true);
-            console.log("Distance fetched:", data.distance);
-          } catch (err) {
-            console.error('Failed to fetch distance:', err);
-            setGeoDistance(null);
-          }
+                const res = await fetch(`${BACKEND_URL}/geodistance`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    lat1: updatedPoints[0].lat,
+                    lon1: updatedPoints[0].lon,
+                    lat2: updatedPoints[1].lat,
+                    lon2: updatedPoints[1].lon,
+                    unit: geoUnit,
+                  }),
+                });
+                const data = await res.json();
+                setGeoDistance(data.distance);
+                setGeoSidebarOpen(true);
+                console.log("Distance fetched:", data.distance);
+              } catch (err) {
+                console.error('Failed to fetch distance:', err);
+                setGeoDistance(null);
+              }
+            }
+        } else if (geoToolMode === "area") {
+            const updated = [...areaPoints, [lat, lon]];
+            setAreaPoints(updated);
         }
-      }, [geoPoints, geoUnit]);
 
-      useEffect(() => {
+        else {
+            // setMarkerPosition([lat, lon]);
+            console.log("Invalid tool mode:", geoToolMode);
+        }
+
+    }, [geoToolMode, geoPoints, geoUnit, areaPoints]);
+
+    useEffect(() => {
         if (geoPoints.length === 2) {
             const cacheKey = `${geoPoints[0].lat},${geoPoints[0].lon}-${geoPoints[1].lat},${geoPoints[1].lon}-${geoUnit}`;
             if (distanceCache.current[cacheKey]) {
                 setGeoDistance(distanceCache.current[cacheKey]);
-                console.log("Using cached distance:", distanceCache.current[cacheKey]);
+                console.log("Using cached distance:", distanceCache.current[cacheKey].toFixed(3));
                 return;
             }
 
@@ -234,16 +253,35 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     const data = await res.json();
                     setGeoDistance(data.distance);
                     distanceCache.current[cacheKey] = data.distance; // Setting up the cache here, forgot it in first attempt.
-                    console.log("Distance fetched via useEffect:", data.distance);
+                    console.log("Using normal distance method:", data.distance.toFixed(3));
                 }
                 catch (err) {
                     console.error('Failed to fetch distance:', err);
                     setGeoDistance(null);
                 }
             };
+
+            if (isGeoMarkerDragging){
+                const timeoutId = setTimeout(() => {
+                    fetchDistance();
+                }, 100); // 100ms timeout, before every backend call during dragging
+                return () => clearTimeout(timeoutId);
+            }
+
             fetchDistance();
         }
-      }, [geoPoints, geoUnit]);
+      }, [geoPoints, geoUnit, isGeoMarkerDragging]);
+
+    useEffect(() => {
+        if (geoToolMode === "area" && areaPoints.length >= 3) {
+            // Just ensuring that the polygon is closed (first == last)
+            const closed = [...areaPoints, areaPoints[0]];
+            const area = calculatePolygonArea(closed.map(([lat, lon]) => [lon, lat])); // [lon, lat] for GeoJSON unfortunately
+            setPolygonArea(area);
+        } else {
+            setPolygonArea(null);
+        }
+    }, [geoToolMode, areaPoints]);
 
     return (
         <div ref={containerRef} style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden' }}>
@@ -323,7 +361,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
-                    <ClickHandler onClick={handleGeoClick} />
+                    <ClickHandler onClick={handleMapClick} />
                     {markerPosition && (
                         <Marker position={markerPosition}>
                             {contentType === 'summary' && (
@@ -342,7 +380,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     )}
 
                     {/* Only show geodistance markers/polyline if sidebar is open */}
-                    {geoSidebarOpen && geoPoints.map((pt, index) => (
+                    {geoSidebarOpen && geoToolMode === "distance" && geoPoints.map((pt, index) => (
                         <Marker key={`geo-${index}`}
                             position={[pt.lat, pt.lon]}
                             draggable={true}
@@ -350,6 +388,12 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 dragstart: () => {
                                     setIsGeoMarkerDragging(true);
                                 },
+                                drag: (e) => {
+                                    const { lat, lng } = e.target.getLatLng();
+                                    const updated = [...geoPoints];
+                                    updated[index] = { lat, lon: lng };
+                                    setGeoPoints(updated); // The distance function will be continioust triggered throughout the dragging journey
+                                }                                ,
                                 dragend: (e) => {
                                     const { lat, lng } = e.target.getLatLng();
                                     const updated = [...geoPoints];
@@ -365,8 +409,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                         </Marker>
                     ))}
 
-                    {/* Polyline if 2 points are selected and sidebar is open */}
-                    {geoSidebarOpen && geoPoints.length === 2 && !isGeoMarkerDragging && (
+                    {/* Polyline if 2 points are selected and sidebar is open, simple enough */}
+                    {geoSidebarOpen && geoToolMode === "distance" && geoPoints.length === 2 && (
                     <Polyline 
                         key={geoPoints.map(pt => `${pt.lat},${pt.lon}`).join('-')}
                         positions={generateGeodesicPoints(
@@ -392,12 +436,69 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                 boxShadow: 'none',
                                 padding: 0
                             }}>
-                                {geoDistance.toFixed(2)} {geoUnit}
+                                {geoDistance !== null
+                                    ? (numberFormat === 'scientific'
+                                        ? geoDistance.toExponential(2)
+                                        : geoDistance.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+                                    ) + ' ' + geoUnit
+                                    : ''}
                             </span>
                         </Tooltip>
                         )}
                     </Polyline>
                     )}
+
+                    {/* Area tools */}
+                    {geoSidebarOpen && geoToolMode === "area" && areaPoints.length >= 2 && (
+                        <Polyline
+                            positions={areaPoints}
+                            pathOptions={{ color: '#1976d2', weight: 3, dashArray: '4 6' }}
+                        />
+                    )}
+                    {geoSidebarOpen && geoToolMode === "area" && areaPoints.length >= 3 && (
+                        <>
+                            <Polygon
+                                positions={areaPoints}
+                                pathOptions={{ color: '#1976d2', fillColor: '#1976d2', fillOpacity: 0.2 }}
+                            />
+                            {/* Area label at centroid */}
+                            <Marker
+                                position={getPolygonCentroid(areaPoints)}
+                                interactive={false}
+                                icon={L.divIcon({
+                                    className: 'area-label',
+                                    html: polygonArea !== null
+                                        ? `<div style="background:rgba(255,255,255,0.8);padding:2px 6px;border-radius:4px;color:#1976d2;font-weight:600;">${formatArea(polygonArea, areaUnit, numberFormat)}</div>`
+                                        : '',
+                                    iconSize: [100, 24],
+                                    iconAnchor: [50, 12]
+                                })}
+                            />
+                        </>
+                    )}
+                    {geoSidebarOpen && geoToolMode === "area" && areaPoints.map((pt, idx) => (
+                        <Marker
+                            key={`area-${idx}`}
+                            position={[pt[0], pt[1]]}
+                            draggable={true}
+                            eventHandlers={{
+                                dragstart: () => {
+                                    setIsGeoMarkerDragging(true);
+                                },
+                                dragend: (e) => {
+                                    const { lat, lng } = e.target.getLatLng();
+                                    const updated = [...areaPoints];
+                                    updated[idx] = [lat, lng];
+                                    setAreaPoints(updated);
+                                    setIsGeoMarkerDragging(false);
+                                }
+                            }}
+                        >
+                            <Popup>
+                                Point {idx + 1}: {pt[0].toFixed(4)}, {pt[1].toFixed(4)}
+                            </Popup>
+                        </Marker>
+                    ))}
 
                 </MapContainer>
 
@@ -439,59 +540,203 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                         gap: 16,
                         border: '1px solid #eee'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <strong>Geodistance</strong>
-                            <button
-                                onClick={() => {
-                                    setGeoSidebarOpen(false);
-                                    setGeoPoints([]);
-                                    setGeoDistance(null);
-                                }}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    fontSize: 18,
-                                    cursor: 'pointer',
-                                    color: '#888'
-                                }}
-                                title="Close"
-                            >×</button>
-                        </div>
-                        <div>
-                            <label style={{ fontWeight: 500, marginRight: 8 }}>Unit:</label>
-                            <select
-                                value={geoUnit}
-                                onChange={e => setGeoUnit(e.target.value)}
-                                style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
-                            >
-                                <option value="km">Kilometers</option>
-                                <option value="mi">Miles</option>
-                            </select>
-                        </div>
-                        {geoDistance !== null && (
-                            <div style={{ fontSize: 20, fontWeight: 600, color: '#1976d2' }}>
-                                {geoDistance.toFixed(2)} {geoUnit}
-                            </div>
+                        {geoToolMode === "menu" && (
+                            <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <strong>Geo Tools</strong>
+                                    <button
+                                        onClick={() => {
+                                            setGeoSidebarOpen(false);
+                                            setGeoPoints([]);
+                                            setGeoDistance(null);
+                                            setGeoToolMode("menu");
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            fontSize: 18,
+                                            cursor: 'pointer',
+                                            color: '#888'
+                                        }}
+                                        title="Close"
+                                    >×</button>
+                                </div>
+                                <button
+                                    style={{
+                                        marginTop: 16,
+                                        padding: '10px 0',
+                                        borderRadius: 4,
+                                        border: '1px solid #1976d2',
+                                        background: '#1976d2',
+                                        color: 'white',
+                                        fontWeight: 500,
+                                        cursor: 'pointer'
+                                    }}
+                                    onClick={() => setGeoToolMode("distance")}
+                                >
+                                    Measure distance
+                                </button>
+                                <button
+                                    style={{
+                                        marginTop: 16,
+                                        padding: '10px 0',
+                                        borderRadius: 4,
+                                        border: '1px solid #1976d2',
+                                        background: '#1976d2',
+                                        color: 'white',
+                                        fontWeight: 500,
+                                        cursor: 'pointer'
+                                    }}
+                                    onClick={() => setGeoToolMode("area")}
+                                >
+                                    Measure area
+                                </button>
+                                {/* Add more tool buttons here in the future */}
+                            </>
                         )}
-                        <button
-                            onClick={() => {
-                                setGeoSidebarOpen(false);
-                                setGeoPoints([]);
-                                setGeoDistance(null);
-                            }}
-                            style={{
-                                marginTop: 8,
-                                padding: '6px 0',
-                                borderRadius: 4,
-                                border: '1px solid #1976d2',
-                                background: '#1976d2',
-                                color: 'white',
-                                fontWeight: 500,
-                                cursor: 'pointer'
-                            }}
-                        >
-                            Clear & Collapse
-                        </button>
+
+                        {geoToolMode === "distance" && (
+                            <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <strong>Geodistance</strong>
+                                    <button
+                                        onClick={() => {
+                                            setGeoToolMode("menu");
+                                            setGeoPoints([]);
+                                            setGeoDistance(null);
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            fontSize: 18,
+                                            cursor: 'pointer',
+                                            color: '#888'
+                                        }}
+                                        title="Back"
+                                    >←</button>
+                                </div>
+                                <div>
+                                    <label style={{ fontWeight: 500, marginRight: 8 }}>Unit:</label>
+                                    <select
+                                        value={geoUnit}
+                                        onChange={e => setGeoUnit(e.target.value)}
+                                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+                                    >
+                                        <option value="km">Kilometers</option>
+                                        <option value="mi">Miles</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ fontWeight: 500, marginRight: 8 }}>Number format:</label>
+                                    <select
+                                        value={numberFormat}
+                                        onChange={e => setNumberFormat(e.target.value)}
+                                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+                                    >
+                                        <option value="normal">Normal</option>
+                                        <option value="scientific">Scientific</option>
+                                    </select>
+                                </div>
+                                {geoDistance !== null && (
+                                    <div style={{ fontSize: 20, fontWeight: 600, color: '#1976d2' }}>
+                                        {numberFormat === 'scientific'
+                                            ? geoDistance.toExponential(2)
+                                            : geoDistance.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+                                        }
+                                    </div>
+                                )}
+                                <button
+                                    onClick={() => {
+                                        setGeoToolMode("menu");
+                                        setGeoPoints([]);
+                                        setGeoDistance(null);
+                                    }}
+                                    style={{
+                                        marginTop: 8,
+                                        padding: '6px 0',
+                                        borderRadius: 4,
+                                        border: '1px solid #1976d2',
+                                        background: '#1976d2',
+                                        color: 'white',
+                                        fontWeight: 500,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Clear & Back
+                                </button>
+                            </>
+                        )}
+
+                        {geoToolMode === "area" && (
+                            <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <strong>Area</strong>
+                                    <button
+                                        onClick={() => {
+                                            setGeoToolMode("menu");
+                                            setAreaPoints([]);
+                                            setPolygonArea(null);
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            fontSize: 18,
+                                            cursor: 'pointer',
+                                            color: '#888'
+                                        }}
+                                        title="Back"
+                                    >←</button>
+                                </div>
+                                {polygonArea !== null && (
+                                    <div style={{ fontSize: 20, fontWeight: 600, color: '#1976d2' }}>
+                                        {formatArea(polygonArea, areaUnit, numberFormat)}
+                                    </div>
+                                )}
+                                <button
+                                    onClick={() => {
+                                        setGeoToolMode("menu");
+                                        setAreaPoints([]);
+                                        setPolygonArea(null);
+                                    }}
+                                    style={{
+                                        marginTop: 8,
+                                        padding: '6px 0',
+                                        borderRadius: 4,
+                                        border: '1px solid #1976d2',
+                                        background: '#1976d2',
+                                        color: 'white',
+                                        fontWeight: 500,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Clear & Back
+                                </button>
+                                <div>
+                                    <label style={{ fontWeight: 500, marginRight: 8 }}>Unit:</label>
+                                    <select
+                                        value={areaUnit}
+                                        onChange={e => setAreaUnit(e.target.value)}
+                                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+                                    >
+                                        <option value="m2">m²</option>
+                                        <option value="km2">km²</option>
+                                        <option value="ha">ha</option>
+                                        <option value="mi2">mi²</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ fontWeight: 500, marginRight: 8 }}>Number format:</label>
+                                    <select
+                                        value={numberFormat}
+                                        onChange={e => setNumberFormat(e.target.value)}
+                                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+                                    >
+                                        <option value="normal">Normal</option>
+                                        <option value="scientific">Scientific</option>
+                                    </select>
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
 
@@ -517,5 +762,6 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
         </div>
     );
 };
+
 
 export default Map;
