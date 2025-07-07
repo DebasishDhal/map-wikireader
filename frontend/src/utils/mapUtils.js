@@ -110,25 +110,31 @@ function getPolygonCentroid(points) {
     return [x / n, y / n];
 }
 
-function formatArea(area, unit = 'sqm') {
+function formatArea(area, unit = 'sqm', format = "normal") {
 
     if (typeof area !== 'number' || isNaN(area)) {
         return 'Invalid area';
     }
-
+    let value;
     switch (unit) {
         case "km2":
-            return (area / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' km²';
+            value = area / 1e6;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' km²';
         case "ha":
-            return (area / 1e4).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' ha';
+            value = area / 1e4;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' ha';
         case "sqm":
-            return area.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' m²';
+            value = area;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m²';
         case "acres":
-            return (area / 4046.8564224).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' acres';
+            value = area / 4046.8564224;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' acres';
         case "mi2":
-            return (area / 2589988.110336).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' sq mi';
+            value = area / 2589988.110336;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' mi²';
         default:
-            return area.toFixed(2).toLocaleString() + ' m²'; // Default
+            value = area;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m²';
     }
 }
 
