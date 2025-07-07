@@ -56,6 +56,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const [geoDistance, setGeoDistance] = useState(null);
 
     const [geoSidebarOpen, setGeoSidebarOpen] = useState(false);
+    const [geoToolMode, setGeoToolMode] = useState("menu"); // "menu" | "distance"
     const [geoUnit, setGeoUnit] = useState('km');
 
     const [isGeoMarkerDragging, setIsGeoMarkerDragging] = useState(false);
@@ -350,7 +351,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     )}
 
                     {/* Only show geodistance markers/polyline if sidebar is open */}
-                    {geoSidebarOpen && geoPoints.map((pt, index) => (
+                    {geoSidebarOpen && geoToolMode === "distance" && geoPoints.map((pt, index) => (
                         <Marker key={`geo-${index}`}
                             position={[pt.lat, pt.lon]}
                             draggable={true}
@@ -380,7 +381,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     ))}
 
                     {/* Polyline if 2 points are selected and sidebar is open */}
-                    {geoSidebarOpen && geoPoints.length === 2 && (
+                    {geoSidebarOpen && geoToolMode === "distance" && geoPoints.length === 2 && (
                     <Polyline 
                         key={geoPoints.map(pt => `${pt.lat},${pt.lon}`).join('-')}
                         positions={generateGeodesicPoints(
@@ -453,59 +454,103 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                         gap: 16,
                         border: '1px solid #eee'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <strong>Geodistance</strong>
-                            <button
-                                onClick={() => {
-                                    setGeoSidebarOpen(false);
-                                    setGeoPoints([]);
-                                    setGeoDistance(null);
-                                }}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    fontSize: 18,
-                                    cursor: 'pointer',
-                                    color: '#888'
-                                }}
-                                title="Close"
-                            >×</button>
-                        </div>
-                        <div>
-                            <label style={{ fontWeight: 500, marginRight: 8 }}>Unit:</label>
-                            <select
-                                value={geoUnit}
-                                onChange={e => setGeoUnit(e.target.value)}
-                                style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
-                            >
-                                <option value="km">Kilometers</option>
-                                <option value="mi">Miles</option>
-                            </select>
-                        </div>
-                        {geoDistance !== null && (
-                            <div style={{ fontSize: 20, fontWeight: 600, color: '#1976d2' }}>
-                                {geoDistance.toFixed(2)} {geoUnit}
-                            </div>
+                        {geoToolMode === "menu" && (
+                            <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <strong>Geo Tools</strong>
+                                    <button
+                                        onClick={() => {
+                                            setGeoSidebarOpen(false);
+                                            setGeoPoints([]);
+                                            setGeoDistance(null);
+                                            setGeoToolMode("menu");
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            fontSize: 18,
+                                            cursor: 'pointer',
+                                            color: '#888'
+                                        }}
+                                        title="Close"
+                                    >×</button>
+                                </div>
+                                <button
+                                    style={{
+                                        marginTop: 16,
+                                        padding: '10px 0',
+                                        borderRadius: 4,
+                                        border: '1px solid #1976d2',
+                                        background: '#1976d2',
+                                        color: 'white',
+                                        fontWeight: 500,
+                                        cursor: 'pointer'
+                                    }}
+                                    onClick={() => setGeoToolMode("distance")}
+                                >
+                                    Measure distance
+                                </button>
+                                {/* Add more tool buttons here in the future */}
+                            </>
                         )}
-                        <button
-                            onClick={() => {
-                                setGeoSidebarOpen(false);
-                                setGeoPoints([]);
-                                setGeoDistance(null);
-                            }}
-                            style={{
-                                marginTop: 8,
-                                padding: '6px 0',
-                                borderRadius: 4,
-                                border: '1px solid #1976d2',
-                                background: '#1976d2',
-                                color: 'white',
-                                fontWeight: 500,
-                                cursor: 'pointer'
-                            }}
-                        >
-                            Clear & Collapse
-                        </button>
+
+                        {geoToolMode === "distance" && (
+                            <>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <strong>Geodistance</strong>
+                                    <button
+                                        onClick={() => {
+                                            setGeoToolMode("menu");
+                                            setGeoPoints([]);
+                                            setGeoDistance(null);
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            fontSize: 18,
+                                            cursor: 'pointer',
+                                            color: '#888'
+                                        }}
+                                        title="Back"
+                                    >←</button>
+                                </div>
+                                <div>
+                                    <label style={{ fontWeight: 500, marginRight: 8 }}>Unit:</label>
+                                    <select
+                                        value={geoUnit}
+                                        onChange={e => setGeoUnit(e.target.value)}
+                                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+                                    >
+                                        <option value="km">Kilometers</option>
+                                        <option value="mi">Miles</option>
+                                    </select>
+                                </div>
+                                {geoDistance !== null && (
+                                    <div style={{ fontSize: 20, fontWeight: 600, color: '#1976d2' }}>
+                                        {geoDistance.toFixed(2)} {geoUnit}
+                                    </div>
+                                )}
+                                <button
+                                    onClick={() => {
+                                        setGeoToolMode("menu");
+                                        setGeoPoints([]);
+                                        setGeoDistance(null);
+                                    }}
+                                    style={{
+                                        marginTop: 8,
+                                        padding: '6px 0',
+                                        borderRadius: 4,
+                                        border: '1px solid #1976d2',
+                                        background: '#1976d2',
+                                        color: 'white',
+                                        fontWeight: 500,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Clear & Back
+                                </button>
+                            </>
+                        )}
                     </div>
                 )}
 
