@@ -62,8 +62,9 @@ function calculatePolygonArea(coords) {
 
   // Closing the polygon is not required as I am already doing it in the frontend.
 
-  const result = poly.Compute();
-  return result.area; // area in square meters, important.
+  const result = poly.Compute(); // Returns object (number (of vertices), perimeter, area)
+  //console.log(result)
+  return {area: result.area, perimeter: result.perimeter}; // area in square meters, important.
 }
 
 function getPolygonCentroid(points) {
@@ -96,11 +97,41 @@ function formatArea(area, unit = 'sqm', format = "normal") {
         case "mi2":
             value = area / 2589988.110336;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' mi²';
+        case "sqft":
+            value = area * 10.76391041671;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' ft²';
         default:
             value = area;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m²';
     }
 }
+function formatPerimeter(perimeter, unit = 'sqm', format = "normal") {
+    if (typeof perimeter !== 'number' || isNaN(perimeter)) {
+        console.log('Invalid perimeter input:', perimeter);
+        return 'Invalid perimeter';
+    }
+    let value;
+    switch (unit) {
+        case "km2":
+            value = perimeter / 1000;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' km';
+        case "ha":
+            value = perimeter / 1000;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' km';
+        case "m2":
+            value = perimeter;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m';
+        case "mi2":
+            value = perimeter / 1609.344;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' mi';
+        case "sqft":
+            value = perimeter * 3.280839895013123; // meters to feet
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' ft';
+        default:
+            value = perimeter;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m';
+    }
+}
 
-export {generateGeodesicPoints, calculatePolygonArea, getPolygonCentroid, formatArea};
+export {generateGeodesicPoints, calculatePolygonArea, getPolygonCentroid, formatArea, formatPerimeter};
     // calculatePolygonArea
