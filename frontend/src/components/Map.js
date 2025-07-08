@@ -8,7 +8,8 @@ import { MapContainer, TileLayer,
         useMap,
         Polyline,
         Tooltip,
-        Polygon
+        Polygon,
+        // GeoJSON
     } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -43,6 +44,9 @@ const ResizeHandler = ({ trigger }) => {
     return null;
 };
 const Map = ( { onMapClick, searchQuery, contentType } ) => {
+
+    const [baseLayer, setBaseLayer] = useState("base"); // "base" | "satellite"
+
     const [markerPosition, setMarkerPosition] = useState(null);
     const [wikiContent, setWikiContent] = useState(null);
     const [panelSize, setPanelSize] = useState('half');
@@ -52,7 +56,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const startX = useRef(0);
     const startWidth = useRef(0);
     const containerRef = useRef(null);
-
+ 
     const [geoPoints, setGeoPoints] = useState([]);
     const [geoDistance, setGeoDistance] = useState(null);
 
@@ -72,6 +76,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
 
     const [polygonPerimeter, setPolygonPerimeter] = useState(null);
 
+    const [viewPanelOpen, setViewPanelOpen] = useState(true);
+    
     const handleMouseDown = (e) => {
         isDragging.current = true;
         startX.current = e.clientX;
@@ -316,6 +322,24 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const tropicOfCancerLines = generateWrappedLine(cancerLat);
     const tropicOfCapricornLines = generateWrappedLine(capricornLat);
 
+    const generateLongitudeLines = (interval = 30, wraps = 1) => {
+        const lines = [];
+      
+        for (let lon = -180; lon <= 180; lon += interval) {
+          for (let w = -wraps; w <= wraps; w++) {
+            const wrappedLon = lon + (360 * w);
+            lines.push([
+              [-90, wrappedLon],
+              [90, wrappedLon]
+            ]);
+          }
+        }
+      
+        return lines;
+      };
+
+    // const longitudeLines = generateLongitudeLines(30, 1);
+
     return (
         <div ref={containerRef} style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden' }}>
             {panelSize !== 'closed' && (
@@ -384,19 +408,111 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                 minWidth: 0,
                 overflow: 'hidden'
             }}>
-
-                
+                {/* View radio group with minimize/restore */}
+                {viewPanelOpen ? (
+                    <div style={{
+                        position: 'absolute',
+                        top: 12,
+                        left: 48, // moved right
+                        zIndex: 1200,
+                        background: 'white',
+                        borderRadius: 8,
+                        boxShadow: '0 2px 8px rgba(12, 12, 12, 0.08)',
+                        padding: '6px 9px 6px 9px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0,
+                        minWidth: 100,
+                        transition: 'all 0.3s ease-in-out',
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontWeight: 600, fontSize: 16, color: '#333' }}>Map View</span>
+                            <button
+                                onClick={() => setViewPanelOpen(false)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    top: 12,
+                                    left: 48, 
+                                    fontSize: 18,
+                                    cursor: 'pointer',
+                                    color: '#888',
+                                    marginLeft: 12,
+                                    lineHeight: 1,
+                                }}
+                                title="Minimize"
+                            >–</button>
+                        </div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input
+                                type="radio"
+                                name="view"
+                                value="base"
+                                checked={baseLayer === "base"}
+                                onChange={() => setBaseLayer("base")}
+                            />
+                            Base
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input
+                                type="radio"
+                                name="view"
+                                value="satellite"
+                                checked={baseLayer === "satellite"}
+                                onChange={() => setBaseLayer("satellite")}
+                            />
+                            Satellite
+                        </label>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => setViewPanelOpen(true)}
+                        style={{
+                            position: 'absolute',
+                            top: 16,
+                            left: 50,
+                            zIndex: 1200,
+                            background: 'white',
+                            borderRadius: 8,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                            padding: '8px 14px',
+                            border: '1px solid #eee',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                        }}
+                        title="Show View Options"
+                    >
+                        View +
+                    </button>
+                )}
                 <MapContainer
                     center={markerPosition || [0, 0]} // Default center if no marker position
                     zoom={2.5} //Originally 2
                     style={{ height: '100%', width: '100%' }}
+                    minZoom={2}
+                    // maxZoom={5}
                 >
                     <ResizeHandler trigger={wikiWidth} />
-                    <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
+                    {baseLayer === "satellite" && (
+                    <>
+                        <TileLayer
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                        attribution='&copy; <a href="https://www.esri.com/">Esri</a> & contributors'
+                        />
+                        <TileLayer
+                        url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png"
+                        attribution='&copy; CartoDB'
+                        />
+                    </>
+                    )}
 
+                    {baseLayer === "base" && (
+                    <TileLayer
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    />
+                    )}
+                    
                     {/* Tropics and Equator Lines */}
                     <>
                     {tropicOfCancerLines.map((line, idx) => (
@@ -424,6 +540,19 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                         }}
                         />
                     ))}
+
+                    {generateLongitudeLines(30, 1).map((line, index) => (
+                        <Polyline
+                            key={`lon-line-${index}`}
+                            positions={line}
+                            pathOptions={{
+                                color: '#aaa',
+                                dashArray: '4, 4',
+                                weight: 1,
+                                interactive: false,
+                            }}
+                        />
+                        ))}
                     </>
 
                     {/* Equator Lines */}
