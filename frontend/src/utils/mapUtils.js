@@ -1,4 +1,4 @@
-
+import geodesic from 'geographiclib-geodesic';
 // Haversine-based geodesic interpolator
 function generateGeodesicPoints(lat1, lon1, lat2, lon2, numPoints = 512) {
     /**
@@ -47,61 +47,25 @@ function generateGeodesicPoints(lat1, lon1, lat2, lon2, numPoints = 512) {
 
 
 
- /**
- * Calculate the area enclosed by coordinates using simplified Karney method
- * @param {Array<Array<number>>} coordinates - Array of [lat, lon] pairs in decimal degrees
- * @returns {number} Area in square meters
- */
-function calculatePolygonArea(coordinates, output_unit = 'sqm') {
-    if (!coordinates || coordinates.length < 3) {
-        throw new Error('At least 3 coordinates are required');
-    }
-    
-    // WGS84 ellipsoid parameters
-    const a = 6378137.0;  // Semi-major axis (meters)
-    const f = 1 / 298.257223563;  // Flattening
-    const e2 = f * (2 - f);  // First eccentricity squared
-    
-    // Ensure polygon is closed
-    const coords = [...coordinates];
-    if (coords[0][0] !== coords[coords.length - 1][0] || 
-        coords[0][1] !== coords[coords.length - 1][1]) {
-        coords.push(coords[0]);
-    }
-    
-    let area = 0;
-    const n = coords.length - 1;
-    
-    // Calculate area using simplified geodesic excess method
-    for (let i = 0; i < n; i++) {
-        const [lat1, lon1] = coords[i];
-        const [lat2, lon2] = coords[i + 1];
-        
-        // Convert to radians
-        const phi1 = lat1 * Math.PI / 180;
-        const phi2 = lat2 * Math.PI / 180;
-        let dL = (lon2 - lon1) * Math.PI / 180;
-        
-        // Normalize longitude difference
-        while (dL > Math.PI) dL -= 2 * Math.PI;
-        while (dL < -Math.PI) dL += 2 * Math.PI;
-        
-        // Geodesic excess contribution
-        const E = 2 * Math.atan2(
-            Math.tan(dL / 2) * (Math.sin(phi1) + Math.sin(phi2)),
-            2 + Math.sin(phi1) * Math.sin(phi2) + Math.cos(phi1) * Math.cos(phi2) * Math.cos(dL)
-        );
-        
-        area += E;
-    }
-    
-    // Convert to actual area using ellipsoid parameters
-    const ellipsoidArea = Math.abs(area) * (a * a / 2) * (1 - e2);
-    
-    return ellipsoidArea; // Return area in square meters
-    
-}
+function calculatePolygonArea(coords) {
+    /*** Calculate the geodesic area of a polygon on the WGS84 ellipsoid.
+     * @param {Array<Array<number>>} coords - Array of [lat, lon] pairs.
+     * @returns {number} Area in square meters.
+    */
+//   console.log(coords); // Lifesaver
+  const geod = geodesic.Geodesic.WGS84;
+  const poly = geod.Polygon(false); // false = polygon, not polyline
 
+  for (const [lat, lon] of coords) {
+    poly.AddPoint(lat, lon);
+  }
+
+  // Closing the polygon is not required as I am already doing it in the frontend.
+
+  const result = poly.Compute(); // Returns object (number (of vertices), perimeter, area)
+  //console.log(result)
+  return {area: result.area, perimeter: result.perimeter}; // area in square meters, important.
+}
 
 function getPolygonCentroid(points) {
     // Simple centroid calculation for small polygons
@@ -113,6 +77,7 @@ function getPolygonCentroid(points) {
 function formatArea(area, unit = 'sqm', format = "normal") {
 
     if (typeof area !== 'number' || isNaN(area)) {
+        console.log('Invalid area input:', area);
         return 'Invalid area';
     }
     let value;
@@ -132,11 +97,41 @@ function formatArea(area, unit = 'sqm', format = "normal") {
         case "mi2":
             value = area / 2589988.110336;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' mi²';
+        case "sqft":
+            value = area * 10.76391041671;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' ft²';
         default:
             value = area;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m²';
     }
 }
+function formatPerimeter(perimeter, unit = 'sqm', format = "normal") {
+    if (typeof perimeter !== 'number' || isNaN(perimeter)) {
+        console.log('Invalid perimeter input:', perimeter);
+        return 'Invalid perimeter';
+    }
+    let value;
+    switch (unit) {
+        case "km2":
+            value = perimeter / 1000;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' km';
+        case "ha":
+            value = perimeter / 1000;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' km';
+        case "m2":
+            value = perimeter;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m';
+        case "mi2":
+            value = perimeter / 1609.344;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' mi';
+        case "sqft":
+            value = perimeter * 3.280839895013123; // meters to feet
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' ft';
+        default:
+            value = perimeter;
+            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m';
+    }
+}
 
-export {generateGeodesicPoints, calculatePolygonArea, getPolygonCentroid, formatArea};
+export {generateGeodesicPoints, calculatePolygonArea, getPolygonCentroid, formatArea, formatPerimeter};
     // calculatePolygonArea
