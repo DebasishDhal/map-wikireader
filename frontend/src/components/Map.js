@@ -276,7 +276,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
         if (geoToolMode === "area" && areaPoints.length >= 3) {
             // Just ensuring that the polygon is closed (first == last)
             const closed = [...areaPoints, areaPoints[0]];
-            const area = calculatePolygonArea(closed.map(([lat, lon]) => [lon, lat])); // [lon, lat] for GeoJSON unfortunately
+            const area = calculatePolygonArea(closed.map(([lat, lon]) => [lat, lon])); // This took me a while to figure out, it should be just (lat, lon), not (lon, lat)
             setPolygonArea(area);
         } else {
             setPolygonArea(null);
