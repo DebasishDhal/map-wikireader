@@ -12,7 +12,7 @@ import { MapContainer, TileLayer,
     } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { generateGeodesicPoints, calculatePolygonArea, getPolygonCentroid, formatArea } from '../utils/mapUtils';
+import { generateGeodesicPoints, calculatePolygonArea, getPolygonCentroid, formatArea, formatPerimeter } from '../utils/mapUtils';
 
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -69,6 +69,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     const [areaUnit, setAreaUnit] = useState('sqm'); // 'sqm', 'sqkm', 'ha', 'acres', 'sqmi'
     
     const [numberFormat, setNumberFormat] = useState('normal'); // 'normal' | 'scientific'
+
+    const [polygonPerimeter, setPolygonPerimeter] = useState(null);
 
     const handleMouseDown = (e) => {
         isDragging.current = true;
@@ -276,10 +278,13 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
         if (geoToolMode === "area" && areaPoints.length >= 3) {
             // Just ensuring that the polygon is closed (first == last)
             const closed = [...areaPoints, areaPoints[0]];
-            const area = calculatePolygonArea(closed); // This took me a while to figure out, it should be just (lat, lon), not (lon, lat)
+            const {area, perimeter} = calculatePolygonArea(closed); // This took me a while to figure out, it should be just (lat, lon), not (lon, lat)
             setPolygonArea(area);
+            setPolygonPerimeter(perimeter);
+            // console.log("Polygon area:", area, "Perimeter:", perimeter);
         } else {
             setPolygonArea(null);
+            setPolygonPerimeter(null);
         }
     }, [geoToolMode, areaPoints]);
 
@@ -676,6 +681,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                             setGeoToolMode("menu");
                                             setAreaPoints([]);
                                             setPolygonArea(null);
+                                            setPolygonPerimeter(null);
                                         }}
                                         style={{
                                             background: 'none',
@@ -692,11 +698,17 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                         {formatArea(polygonArea, areaUnit, numberFormat)}
                                     </div>
                                 )}
+                                {polygonPerimeter !== null && (
+                                    <div style={{ fontSize: 16, color: '#555' }}>
+                                        Perimeter: {formatPerimeter(polygonPerimeter, areaUnit, numberFormat)}
+                                    </div>
+                                )}
                                 <button
                                     onClick={() => {
                                         setGeoToolMode("menu");
                                         setAreaPoints([]);
                                         setPolygonArea(null);
+                                        setPolygonPerimeter(null);
                                     }}
                                     style={{
                                         marginTop: 8,
@@ -722,6 +734,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                         <option value="km2">km²</option>
                                         <option value="ha">ha</option>
                                         <option value="mi2">mi²</option>
+                                        <option value="acres">acres</option>
+                                        <option value="sqft">ft²</option>
                                     </select>
                                 </div>
                                 <div>
