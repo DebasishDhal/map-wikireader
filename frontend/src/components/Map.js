@@ -288,6 +288,34 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
         }
     }, [geoToolMode, areaPoints]);
 
+
+    const wrapCount = 3;
+
+    const equatorLines = [];
+    for (let i = -wrapCount; i <= wrapCount; i++) {
+        const offset = i * 360;
+        equatorLines.push([
+            [0, -180 + offset],
+            [0, 180 + offset],
+        ]);
+    }
+    const cancerLat = 23.4366;
+    const capricornLat = -23.4366;
+    const generateWrappedLine = (latitude) => {
+        const lines = [];
+        for (let i = -wrapCount; i <= wrapCount; i++) {
+          const offset = i * 360;
+          lines.push([
+            [latitude, -180 + offset],
+            [latitude, 180 + offset],
+          ]);
+        }
+        return lines;
+      };
+      
+    const tropicOfCancerLines = generateWrappedLine(cancerLat);
+    const tropicOfCapricornLines = generateWrappedLine(capricornLat);
+
     return (
         <div ref={containerRef} style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden' }}>
             {panelSize !== 'closed' && (
@@ -356,9 +384,11 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                 minWidth: 0,
                 overflow: 'hidden'
             }}>
+
+                
                 <MapContainer
                     center={markerPosition || [0, 0]} // Default center if no marker position
-                    zoom={2}
+                    zoom={2.5} //Originally 2
                     style={{ height: '100%', width: '100%' }}
                 >
                     <ResizeHandler trigger={wikiWidth} />
@@ -366,6 +396,52 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
+
+                    {/* Tropics and Equator Lines */}
+                    <>
+                    {tropicOfCancerLines.map((line, idx) => (
+                        <Polyline
+                        key={`cancer-${idx}`}
+                        positions={line}
+                        pathOptions={{
+                            color: 'gray',
+                            weight: 1,
+                            dashArray: '4, 4',
+                            interactive: false,
+                        }}
+                        />
+                    ))}
+
+                    {tropicOfCapricornLines.map((line, idx) => (
+                        <Polyline
+                        key={`capricorn-${idx}`}
+                        positions={line}
+                        pathOptions={{
+                            color: 'gray',
+                            weight: 1,
+                            dashArray: '4, 4',
+                            interactive: false,
+                        }}
+                        />
+                    ))}
+                    </>
+
+                    {/* Equator Lines */}
+                    {equatorLines.map((line, idx) => (
+                    <Polyline
+                        key={`equator-${idx}`}
+                        positions={line}
+                        pathOptions={{
+                            color: 'gray',
+                            weight: 1.5,
+                            dashArray: '6, 6',
+                            interactive: false,
+                        }}
+                    />
+
+                    
+                    ))}
+
                     <ClickHandler onClick={handleMapClick} />
                     {markerPosition && (
                         <Marker position={markerPosition}>
