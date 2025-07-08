@@ -8,6 +8,7 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
     "geodesy": "^2.4.0",
+    "geographiclib-geodesic": "^2.1.1",
     "leaflet": "^1.9.4",
     "leaflet.geodesic": "^2.7.1",
     "react": "^19.0.0-rc.1",
