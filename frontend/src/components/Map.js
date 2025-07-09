@@ -9,7 +9,8 @@ import { MapContainer, TileLayer,
         Polyline,
         Tooltip,
         Polygon,
-        GeoJSON
+        GeoJSON,
+        ScaleControl
     } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -22,6 +23,8 @@ L.Icon.Default.mergeOptions({
     iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
+// Add scale
+// L.control.scale().addTo(window.Map);
 
 const ClickHandler = ({ onClick }) => {
     useMapEvents({
@@ -506,8 +509,11 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                         [-90, -180],
                         [90, 180]
                     ]}
-                    maxBoundsViscosity={1.0} // This prevents panning outside the horizonta/vertical bounds of the map. Avoids showing ugly section of the maps.
+                    maxBoundsViscosity={1.0} // This completely prevents panning outside the horizonta/vertical bounds of the map. Avoids showing ugly section of the maps.
                 >
+
+                    <ScaleControl position="bottomright" imperial={true} />
+
                     <ResizeHandler trigger={wikiWidth} />
                     {baseLayer === "satellite" && (
                     <>
