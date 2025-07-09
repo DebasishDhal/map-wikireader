@@ -48,6 +48,8 @@ function App() {
         onMapClick={handleMapClick} 
         searchQuery={submittedQuery}
         contentType={contentType}
+        setSearchQuery={setSearchQuery}
+        setSubmittedQuery={setSubmittedQuery}
       />
     </div>
   );

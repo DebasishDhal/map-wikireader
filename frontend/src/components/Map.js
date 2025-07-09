@@ -46,8 +46,7 @@ const ResizeHandler = ({ trigger }) => {
     }, [trigger, map]);
     return null;
 };
-const Map = ( { onMapClick, searchQuery, contentType } ) => {
-
+const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmittedQuery } ) => {
     const [baseLayer, setBaseLayer] = useState("base"); // "base" | "satellite"
 
     const [markerPosition, setMarkerPosition] = useState(null);
@@ -92,6 +91,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
         }, [map, position]);
         return null;
     };
+
 
     const handleMouseDown = (e) => {
         isDragging.current = true;
@@ -385,7 +385,9 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                                     onClick={() => {
                                         setMarkerPosition(null);
                                         setWikiContent(null);
-                                        setIframeSrc(''); 
+                                        setIframeSrc('');                                        
+                                        setSearchQuery('');
+                                        setSubmittedQuery('');
                                     }}
                                     style={{
                                         padding: '3px 8px',
