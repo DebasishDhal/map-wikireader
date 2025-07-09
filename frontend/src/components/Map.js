@@ -502,6 +502,11 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     style={{ height: '100%', width: '100%' }}
                     minZoom={2}
                     // maxZoom={5}
+                    maxBounds={[
+                        [-90, -180],
+                        [90, 180]
+                    ]}
+                    maxBoundsViscosity={1.0} // This prevents panning outside the horizonta/vertical bounds of the map. Avoids showing ugly section of the maps.
                 >
                     <ResizeHandler trigger={wikiWidth} />
                     {baseLayer === "satellite" && (
