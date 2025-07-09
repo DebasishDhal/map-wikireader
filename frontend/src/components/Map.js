@@ -379,7 +379,27 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                         flexShrink: 0
                     }}>
                         <div style={{ marginBottom: '20px' }}>
-                            <h2>{wikiContent?.title || 'Search for a location'}</h2>
+                            <h2 style={{ margin: 2}}>{wikiContent?.title || 'Search for a location'}</h2>
+                            {markerPosition && (
+                                <button
+                                    onClick={() => {
+                                        setMarkerPosition(null);
+                                        setWikiContent(null);
+                                        setIframeSrc(''); 
+                                    }}
+                                    style={{
+                                        padding: '3px 8px',
+                                        background: '#e53935',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: 4,
+                                        cursor: 'pointer',
+                                        fontWeight: 500,
+                                    }}
+                                >
+                                    Remove Marker
+                                </button>
+                            )}
                         </div>
                         {wikiContent ? (
                         <div>
