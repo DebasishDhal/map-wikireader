@@ -9,7 +9,7 @@ import { MapContainer, TileLayer,
         Polyline,
         Tooltip,
         Polygon,
-        // GeoJSON
+        GeoJSON
     } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -78,6 +78,8 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
 
     const [viewPanelOpen, setViewPanelOpen] = useState(true);
     
+    const [countryBorders, setCountryBorders] = useState(null);
+
     const handleMouseDown = (e) => {
         isDragging.current = true;
         startX.current = e.clientX;
@@ -294,6 +296,14 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
         }
     }, [geoToolMode, areaPoints]);
 
+    useEffect(() => {
+        if (!countryBorders) {
+            fetch('/data/countryBorders.json')
+                .then(res => res.json())
+                .then(data => setCountryBorders(data))
+                .catch(err => console.error("Failed to load country borders:", err));
+        }
+    }, [countryBorders]);
 
     const wrapCount = 3;
 
@@ -339,6 +349,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
       };
 
     // const longitudeLines = generateLongitudeLines(30, 1);
+
 
     return (
         <div ref={containerRef} style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden' }}>
@@ -496,13 +507,24 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     {baseLayer === "satellite" && (
                     <>
                         <TileLayer
-                        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                        attribution='&copy; <a href="https://www.esri.com/">Esri</a> & contributors'
+                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                            attribution='&copy; <a href="https://www.esri.com/">Esri</a> & contributors'
                         />
                         <TileLayer
-                        url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png"
-                        attribution='&copy; CartoDB'
+                            url="https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png"
+                            attribution='&copy; CartoDB'
                         />
+                        {countryBorders && (
+                            <GeoJSON
+                                data={countryBorders}
+                                style={{
+                                    color: '#ffff99',
+                                    weight: 1.5,
+                                    opacity: 0.8,
+                                    fillOpacity: 0.1,
+                                }}
+                            />
+                        )}
                     </>
                     )}
 

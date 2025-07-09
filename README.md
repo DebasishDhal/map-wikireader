@@ -23,3 +23,4 @@ pinned: false
 ## Resources
 - [Geodesic Area calculator](https://geographiclib.sourceforge.io/cgi-bin/Planimeter?type=polygon&rhumb=geodesic&radius=6378137&flattening=1%2F298.257223563&input=40.7128%2C+-74.0060%0D%0A34.0522%2C+-118.2437%0D%0A51.5074%2C+0.1278&option=Submit)
 - [Area calculator function in geographiclib-geodesic module's codebase](https://github.com/geographiclib/geographiclib-js/blob/main/geodesic/PolygonArea.js)
+- [Country border data](https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson)
