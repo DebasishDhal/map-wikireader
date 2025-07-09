@@ -83,6 +83,16 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
     
     const [countryBorders, setCountryBorders] = useState(null);
 
+    const CenterMap = ({ position }) => {
+        const map = useMap();
+        useEffect(() => {
+            if (position && Array.isArray(position) && position.length === 2) {
+            map.setView(position, map.getZoom());
+            }
+        }, [map, position]);
+        return null;
+    };
+
     const handleMouseDown = (e) => {
         isDragging.current = true;
         startX.current = e.clientX;
@@ -515,6 +525,7 @@ const Map = ( { onMapClick, searchQuery, contentType } ) => {
                     <ScaleControl position="bottomright" imperial={true} />
 
                     <ResizeHandler trigger={wikiWidth} />
+                    <CenterMap position={markerPosition} />
                     {baseLayer === "satellite" && (
                     <>
                         <TileLayer
