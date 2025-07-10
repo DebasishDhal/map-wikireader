@@ -311,7 +311,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
 
     useEffect(() => {
         if (!countryBorders) {
-            fetch('/data/countryBorders.json')
+            fetch('/data/countryBordersCondensed.json')
                 .then(res => res.json())
                 .then(data => setCountryBorders(data))
                 .catch(err => console.error("Failed to load country borders:", err));
