@@ -33,38 +33,46 @@ full_page_cache = TTLCache(maxsize=100, ttl=300)
 def health_check():
     return {"status": "ok"}
 
-@app.get("/wiki/{page_name}")
-async def get_wiki_page(page_name: str, background_tasks: BackgroundTasks):
-    if page_name in summary_cache:
+@app.get("/wiki/search/summary/{summary_page_name}")
+async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundTasks):
+    if summary_page_name in summary_cache:
         # print("Cache hit for summary:", page_name) #Working
-        return JSONResponse(content=summary_cache[page_name], status_code=200)
-    response = requests.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{page_name}", timeout=10)
+        return JSONResponse(content=summary_cache[summary_page_name], status_code=200)
+    try:
+        response = requests.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{summary_page_name}", timeout=10)
 
-    if response.status_code != 200:
+        if response.status_code != 200:
+            return JSONResponse(
+                content={"error": "Page not found"},
+                status_code=404
+            )
+        try:
+            coords = loc.geocode(summary_page_name, timeout=5)
+        except Exception as e:
+            coords = None
+        
+        result = {
+                "title": summary_page_name,
+                "content": f"{response.json().get('extract', 'No content available')}",
+                "latitude": coords.latitude if coords else None,
+                "longitude": coords.longitude if coords else None
+            }
+        
+        background_tasks.add_task(lambda: summary_cache.__setitem__(summary_page_name, result))
+
+
         return JSONResponse(
-            content={"error": "Page not found"},
-            status_code=404
+            content= result,
+            status_code=200
         )
-    
-    coords = loc.geocode(page_name)
-    
-    result = {
-            "title": page_name,
-            "content": f"{response.json().get('extract', 'No content available')}",
-            "latitude": coords.latitude if coords else None,
-            "longitude": coords.longitude if coords else None
-        }
-    
-    background_tasks.add_task(lambda: summary_cache.__setitem__(page_name, result))
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e), 'response': str(response)},
+            status_code=500
+        )
 
-
-    return JSONResponse(
-        content= result,
-        status_code=200
-    )
-
-@app.get("/wiki/search/{full_page}")
-def search_wiki(full_page: str, background_tasks: BackgroundTasks):
+@app.get("/wiki/search/full/{full_page}")
+def search_wiki_full_page(full_page: str, background_tasks: BackgroundTasks):
     if full_page in full_page_cache:
         # print("Cache hit for full_page:", full_page) #Working
         return JSONResponse(content=full_page_cache[full_page], status_code=200)
@@ -76,8 +84,10 @@ def search_wiki(full_page: str, background_tasks: BackgroundTasks):
                 content={"error": "Page not found"},
                 status_code=404
             )
-
-        coords = loc.geocode(full_page)
+        try:
+            coords = loc.geocode(full_page, timeout=5)
+        except Exception as e:
+            coords = None
 
         result = {
                         "title": full_page, 
