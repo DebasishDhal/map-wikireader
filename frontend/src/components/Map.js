@@ -132,10 +132,10 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
         try{
             let endpoint;
             if (contentType === 'summary') {
-                endpoint = `${BACKEND_URL}/wiki/${pageName}`;
+                endpoint = `${BACKEND_URL}/wiki/search/summary/${pageName}`;
             }
             else if (contentType === 'full') {
-                endpoint = `${BACKEND_URL}/wiki/search/${pageName}`;
+                endpoint = `${BACKEND_URL}/wiki/search/full/${pageName}`;
             }
 
             else {

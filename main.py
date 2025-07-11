@@ -1,10 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import requests
 from geopy.geocoders import Nominatim
 import geopy.distance
+from cachetools import TTLCache
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -25,34 +30,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+BACKEND_WIKI_CACHE_TTL = int(os.getenv("BACKEND_WIKI_CACHE_TTL", 300))
+summary_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)  # ttl time in seconds, then cache expires
+full_page_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)
+
 @app.get("/")
 def health_check():
     return {"status": "ok"}
 
-@app.get("/wiki/{page_name}")
-async def get_wiki_page(page_name: str):
-    response = requests.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{page_name}", timeout=10)
+@app.get("/wiki/search/summary/{summary_page_name}")
+async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundTasks):
+    if summary_page_name in summary_cache:
+        # print("Cache hit for summary:", page_name) #Working
+        return JSONResponse(content=summary_cache[summary_page_name], status_code=200)
+    try:
+        response = requests.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{summary_page_name}", timeout=10)
 
-    if response.status_code != 200:
+        if response.status_code != 200:
+            return JSONResponse(
+                content={"error": "Page not found"},
+                status_code=404
+            )
+        try:
+            coords = loc.geocode(summary_page_name, timeout=5)
+        except Exception as e:
+            coords = None
+        
+        result = {
+                "title": summary_page_name,
+                "content": f"{response.json().get('extract', 'No content available')}",
+                "latitude": coords.latitude if coords else None,
+                "longitude": coords.longitude if coords else None
+            }
+        
+        background_tasks.add_task(lambda: summary_cache.__setitem__(summary_page_name, result))
+
+
         return JSONResponse(
-            content={"error": "Page not found"},
-            status_code=404
+            content= result,
+            status_code=200
         )
-    
-    coords = loc.geocode(page_name)
-    
-    return JSONResponse(
-        content={
-            "title": page_name,
-            "content": f"{response.json().get('extract', 'No content available')}",
-            "latitude": coords.latitude if coords else None,
-            "longitude": coords.longitude if coords else None
-        },
-        status_code=200
-    )
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e), 'response': str(response)},
+            status_code=500
+        )
 
-@app.get("/wiki/search/{full_page}")
-def search_wiki(full_page: str):
+@app.get("/wiki/search/full/{full_page}")
+def search_wiki_full_page(full_page: str, background_tasks: BackgroundTasks):
+    if full_page in full_page_cache:
+        # print("Cache hit for full_page:", full_page) #Working
+        return JSONResponse(content=full_page_cache[full_page], status_code=200)
+    
     response = requests.get(f"https://en.wikipedia.org/wiki/{full_page}", timeout=10)
     try:
         if response.status_code != 200:
@@ -60,18 +89,25 @@ def search_wiki(full_page: str):
                 content={"error": "Page not found"},
                 status_code=404
             )
+        try:
+            coords = loc.geocode(full_page, timeout=5)
+        except Exception as e:
+            coords = None
 
-        coords = loc.geocode(full_page)
-
-        return JSONResponse(
-            content={
+        result = {
                         "title": full_page, 
                         "content": str(response.text),
                         "latitude": coords.latitude if coords else None,
                         "longitude": coords.longitude if coords else None
-                    },
+                }
+        
+        background_tasks.add_task(lambda: full_page_cache.__setitem__(full_page, result))
+
+        return JSONResponse(
+            content= result,
             status_code=200
         )
+    
     except Exception as e:
         return JSONResponse(
             content={"error": str(e), 'response': str(response)},
@@ -111,6 +147,15 @@ def get_geodistance(payload: Geodistance):
             "lon1": lon1,
             "lat2": lat2,
             "lon2": lon2
+        },
+        status_code=200
+    )
+
+@app.get("/random")
+def random():
+    return JSONResponse(
+        content={
+            "message": "Spare endpoint to test."
         },
         status_code=200
     )
