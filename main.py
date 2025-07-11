@@ -1,11 +1,15 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import requests
 from geopy.geocoders import Nominatim
 import geopy.distance
 from cachetools import TTLCache
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -26,8 +30,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-summary_cache = TTLCache(maxsize=100, ttl=300)  # ttl time in seconds, then cache expires
-full_page_cache = TTLCache(maxsize=100, ttl=300)
+BACKEND_WIKI_CACHE_TTL = int(os.getenv("BACKEND_WIKI_CACHE_TTL", 300))
+summary_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)  # ttl time in seconds, then cache expires
+full_page_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)
 
 @app.get("/")
 def health_check():
@@ -148,11 +153,9 @@ def get_geodistance(payload: Geodistance):
 
 @app.get("/random")
 def random():
-    import cachetools
     return JSONResponse(
         content={
-            "message": "This endpoint is not implemented yet.",
-            "cachetools": cachetools.__version__
+            "message": "Spare endpoint to test."
         },
-        status_code=501
+        status_code=200
     )
