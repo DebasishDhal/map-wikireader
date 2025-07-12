@@ -46,6 +46,12 @@ def health_check():
 
 @app.get("/wiki/search/summary/{summary_page_name}")
 async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundTasks):
+    """
+        This function fetches the summary of a Wikipedia page along with its geographical coordinates.
+        It also caches the result in ephemeral in-memory cache in the background.
+        Input: summary_page_name: str - Name of the Wikipedia page to fetch summary for.
+        Output: {"title": "Page Title", "content": "Summary content here", "latitude": float, "longitude": float9}
+    """
     if summary_page_name in summary_cache:
         # print("Cache hit for summary:", page_name) #Working
         return JSONResponse(content=summary_cache[summary_page_name], status_code=200)
@@ -83,7 +89,13 @@ async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundT
         )
 
 @app.get("/wiki/search/full/{full_page}")
-def search_wiki_full_page(full_page: str, background_tasks: BackgroundTasks):
+async def search_wiki_full_page(full_page: str, background_tasks: BackgroundTasks):
+    """
+        This function fetches the full content of a Wikipedia page along with its geographical coordinates. 
+        It also caches the result in ephemeral in-memory cache in the background.
+        Input: full_page: str - Name of the Wikipedia page to fetch full content for.
+        Output: {"title": "Page Title", "content": "Full content here", "latitude": float, "longitude": float}
+    """
     if full_page in full_page_cache:
         # print("Cache hit for full_page:", full_page) #Working
         return JSONResponse(content=full_page_cache[full_page], status_code=200)
@@ -123,6 +135,10 @@ def search_wiki_full_page(full_page: str, background_tasks: BackgroundTasks):
 
 @app.post("/geodistance")
 def get_geodistance(payload: Geodistance):
+    """
+        Input: "lat1", "lon1", "lat2", "lon2", "unit (km/mi)"
+        Output: {"distance": float, "unit": str, "lat1": float, "lon1": float, "lat2": float, "lon2": float}
+    """
     lat1, lon1 = payload.lat1, payload.lon1
     lat2, lon2 = payload.lat2, payload.lon2
     unit = payload.unit
@@ -159,6 +175,30 @@ def get_geodistance(payload: Geodistance):
 
 @app.post("/wiki/nearby")
 async def get_nearby_wiki_pages(payload: NearbyWikiPage):
+    """
+    Returns a list of wikipedia pages whose geographical coordinates are within a specified radius from a given location.
+    Input:
+    - lat: Latitude of the reference point
+    - lon: Longitude of the reference point
+    - radius: Radius in meters within which to search for pages
+    - limit: Maximum number of pages to return
+
+    Output:
+        {
+            "pages": [
+                {
+                    "pageid": 123456,
+                    "title": "Page Title",
+                    "lat": 54.163337,
+                    "lon": 37.561109,
+                    "dist": 123.45  # Dist. in meters from the reference point
+                    ...
+                },
+                ...
+            ],
+            "count": 10 #Total no. of such pages
+        }
+    """
     lat, lon = payload.lat, payload.lon
     radius = payload.radius
     limit = payload.limit
