@@ -235,7 +235,17 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                         title: page.title,
                         distance: page.dist
                     }));
-                    setExplorationMarkers(markers);
+                    // setExplorationMarkers(markers);
+                    // Now adding the main clicked point
+                    setExplorationMarkers([
+                        {
+                            position: [lat, lon],
+                            title: 'Clicked Location',
+                            distance: 0,
+                            isClickedPoint: true
+                        },
+                        ...markers
+                    ]);
                     console.log(`Found ${markers.length} nearby pages`);
                 } else {
                     console.error('Failed to fetch nearby pages');
@@ -695,11 +705,31 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                         <Marker 
                             key={`exploration-${index}`}
                             position={marker.position}
+                            icon={marker.isClickedPoint ? new L.Icon({
+                                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+                                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41],
+                                popupAnchor: [1, -34],
+                                shadowSize: [41, 41]
+                            }) : new L.Icon({
+                                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+                                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41],
+                                popupAnchor: [1, -34],
+                                shadowSize: [41, 41]
+                            })}
                         >
                             <Popup>
                                 <div>
                                     <strong>{marker.title}</strong><br />
-                                    <small>Distance: {marker.distance.toFixed(1)}m</small>
+                                    {!marker.isClickedPoint && (
+                                        <small>Distance: {marker.distance.toFixed(1)}m</small>
+                                    )}
+                                    {marker.isClickedPoint && (
+                                        <small>Pos: {marker.position[0].toFixed(4)}, {marker.position[1].toFixed(4)}</small>
+                                    )}
                                 </div>
                             </Popup>
                         </Marker>
