@@ -82,6 +82,12 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
     
     const [countryBorders, setCountryBorders] = useState(null);
 
+    const [explorationMode, setExplorationMode] = useState(false);
+    const [explorationRadius, setExplorationRadius] = useState(10000);
+    const [explorationLimit, setExplorationLimit] = useState(10);
+    const [explorationMarkers, setExplorationMarkers] = useState([]);
+    const [explorationSidebarOpen, setExplorationSidebarOpen] = useState(false);
+
     const CenterMap = ({ position }) => {
         const map = useMap();
         useEffect(() => {
@@ -208,7 +214,36 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
     };
 
     const handleMapClick = useCallback(async (lat, lon) => {
-        if (geoToolMode === "distance") {
+        if (explorationMode) {
+            // Handle exploration mode click
+            try {
+                const res = await fetch(`${BACKEND_URL}/wiki/nearby`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lat: lat,
+                        lon: lon,
+                        radius: explorationRadius,
+                        limit: explorationLimit
+                    }),
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    const markers = data.pages.map(page => ({
+                        position: [page.lat, page.lon],
+                        title: page.title,
+                        distance: page.dist
+                    }));
+                    setExplorationMarkers(markers);
+                    console.log(`Found ${markers.length} nearby pages`);
+                } else {
+                    console.error('Failed to fetch nearby pages');
+                }
+            } catch (err) {
+                console.error('Error fetching nearby pages:', err);
+            }
+        } else if (geoToolMode === "distance") {
             const updatedPoints = [...geoPoints, { lat, lon }];
             if (updatedPoints.length > 2) {
               updatedPoints.shift(); // keep only two
@@ -249,7 +284,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
             console.log("Invalid tool mode:", geoToolMode);
         }
 
-    }, [geoToolMode, geoPoints, geoUnit, areaPoints]);
+    }, [explorationMode, explorationRadius, explorationLimit, geoToolMode, geoPoints, geoUnit, areaPoints]);
 
     useEffect(() => {
         if (geoPoints.length === 2) {
@@ -655,6 +690,21 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                         </Marker>
                     )}
 
+                    {/* Exploration Mode Markers */}
+                    {explorationMode && explorationMarkers.map((marker, index) => (
+                        <Marker 
+                            key={`exploration-${index}`}
+                            position={marker.position}
+                        >
+                            <Popup>
+                                <div>
+                                    <strong>{marker.title}</strong><br />
+                                    <small>Distance: {marker.distance.toFixed(1)}m</small>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    ))}
+
                     {/* Only show geodistance markers/polyline if sidebar is open */}
                     {geoSidebarOpen && geoToolMode === "distance" && geoPoints.map((pt, index) => (
                         <Marker key={`geo-${index}`}
@@ -799,7 +849,176 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                     </button>
                 )}
 
-                {/* Geo Sidebar */}
+                {/* Exploration Mode Button */}
+                {!explorationSidebarOpen && !geoSidebarOpen && (
+                    <button
+                        onClick={() => setExplorationSidebarOpen(true)}
+                        style={{
+                            position: 'absolute',
+                            top: 50, // Position below Geo Tools button
+                            right: 12,
+                            zIndex: 1000,
+                            padding: '6px 12px',
+                            backgroundColor: '#4caf50',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Exploration
+                    </button>
+                )}
+
+                {/* Exploration Mode Button - when Geo Tools sidebar is open */}
+                {!explorationSidebarOpen && geoSidebarOpen && (
+                    <button
+                        onClick={() => setExplorationSidebarOpen(true)}
+                        style={{
+                            position: 'fixed',
+                            top: 320, // Position below Geo Tools sidebar
+                            right: 24,
+                            zIndex: 2000,
+                            padding: '6px 12px',
+                            backgroundColor: '#4caf50',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Exploration
+                    </button>
+                )}
+
+                {/* Exploration Sidebar */}
+                {explorationSidebarOpen && (
+                    <div style={{
+                        position: 'fixed',
+                        top: geoSidebarOpen ? 320 : 24, // Position below Geo Tools sidebar if open
+                        right: 24,
+                        width: 280,
+                        background: 'white',
+                        borderRadius: 10,
+                        boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
+                        zIndex: 2000,
+                        padding: 20,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 16,
+                        border: '1px solid #eee'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <strong>Exploration Mode</strong>
+                            <button
+                                onClick={() => {
+                                    setExplorationSidebarOpen(false);
+                                    setExplorationMode(false);
+                                    setExplorationMarkers([]);
+                                }}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    fontSize: 18,
+                                    cursor: 'pointer',
+                                    color: '#888'
+                                }}
+                                title="Close"
+                            >×</button>
+                        </div>
+
+                        <div>
+                            <label style={{ fontWeight: 500, marginBottom: 8, display: 'block' }}>
+                                Search Radius (meters):
+                            </label>
+                            <input
+                                type="range"
+                                min="10"
+                                max="10000"
+                                step="1000"
+                                value={explorationRadius}
+                                onChange={(e) => setExplorationRadius(parseInt(e.target.value))}
+                                style={{ width: '100%' }}
+                            />
+                            <div style={{ textAlign: 'center', marginTop: 4 }}>
+                                {explorationRadius.toLocaleString()}m
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style={{ fontWeight: 500, marginBottom: 8, display: 'block' }}>
+                                Number of Results:
+                            </label>
+                            <input
+                                type="range"
+                                min="1"
+                                max="50"
+                                step="1"
+                                value={explorationLimit}
+                                onChange={(e) => setExplorationLimit(parseInt(e.target.value))}
+                                style={{ width: '100%' }}
+                            />
+                            <div style={{ textAlign: 'center', marginTop: 4 }}>
+                                {explorationLimit} results
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <input
+                                type="checkbox"
+                                id="explorationMode"
+                                checked={explorationMode}
+                                onChange={(e) => setExplorationMode(e.target.checked)}
+                            />
+                            <label htmlFor="explorationMode" style={{ fontWeight: 500 }}>
+                                Enable Exploration Mode
+                            </label>
+                        </div>
+
+                        {explorationMode && (
+                            <div style={{ 
+                                padding: '8px 12px', 
+                                backgroundColor: '#e8f5e8', 
+                                borderRadius: 4,
+                                fontSize: '14px',
+                                color: '#2e7d32'
+                            }}>
+                                ✓ Click anywhere on the map to find nearby Wikipedia pages
+                            </div>
+                        )}
+
+                        {explorationMarkers.length > 0 && (
+                            <div style={{ 
+                                padding: '8px 12px', 
+                                backgroundColor: '#e3f2fd', 
+                                borderRadius: 4,
+                                fontSize: '14px',
+                                color: '#1976d2'
+                            }}>
+                                Found {explorationMarkers.length} nearby pages
+                            </div>
+                        )}
+
+                        <button
+                            onClick={() => {
+                                setExplorationMarkers([]);
+                            }}
+                            style={{
+                                padding: '6px 0',
+                                borderRadius: 4,
+                                border: '1px solid #f44336',
+                                background: '#f44336',
+                                color: 'white',
+                                fontWeight: 500,
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Clear Markers
+                        </button>
+                    </div>
+                )}
+
+                {/* Geo Sidebar - Keep as is */}
                 {geoSidebarOpen && (
                     <div style={{
                         position: 'fixed',

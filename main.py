@@ -22,6 +22,12 @@ class Geodistance(BaseModel):
     lon2: float = Field(..., ge=-180, le=180)
     unit: str = "km"
 
+class NearbyWikiPage(BaseModel):
+    lat: float = Field(default=54.163337, ge=-90, le=90)
+    lon: float = Field(default=37.561109, ge=-180, le=180)
+    radius: int = Field(default=1000, ge=10, le=10000,description="Distance in meters from the reference point")
+    limit: int = Field(10, ge=1, description="Number of pages to return")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Replace with your frontend domain in prod
@@ -151,11 +157,68 @@ def get_geodistance(payload: Geodistance):
         status_code=200
     )
 
+@app.post("/wiki/nearby")
+async def get_nearby_wiki_pages(payload: NearbyWikiPage):
+    lat, lon = payload.lat, payload.lon
+    radius = payload.radius
+    limit = payload.limit
+
+    url = ("https://en.wikipedia.org/w/api.php"+"?action=query"
+            "&list=geosearch"
+            f"&gscoord={lat}|{lon}"
+            f"&gsradius={radius}"
+            f"&gslimit={limit}"
+            "&format=json")
+    print(url)
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            return JSONResponse(
+                content={"error": "Failed to fetch nearby pages"},
+                status_code=500
+            )
+        data = response.json()
+
+        pages = data.get("query", {}).get("geosearch", [])
+
+        return JSONResponse(
+            content={
+                "pages": pages,
+                "count": len(pages)
+            },
+            status_code=200
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+    
+
+
+
 @app.get("/random")
 def random():
+    url = "https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=54.163337|37.561109&gsradius=10000&gslimit=10&format=json"
+    response = requests.get(url, timeout=10)
+
+    if response.status_code != 200:
+        return JSONResponse(
+            content={"error": "Failed to fetch random page"},
+            status_code=500
+        )
+    data = response.json()
+    pages = data.get("query", {}).get("geosearch", [])
+    if not pages:
+        return JSONResponse(
+            content={"error": "No pages found"},
+            status_code=404
+        )
+     
     return JSONResponse(
         content={
-            "message": "Spare endpoint to test."
+            "pages": pages,
+            "count": len(pages)
         },
         status_code=200
     )
