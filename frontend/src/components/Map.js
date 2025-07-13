@@ -965,13 +965,37 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                                 type="range"
                                 min="10"
                                 max="10000"
-                                step="1000"
                                 value={explorationRadius}
                                 onChange={(e) => setExplorationRadius(parseInt(e.target.value))}
                                 style={{ width: '100%' }}
                             />
-                            <div style={{ textAlign: 'center', marginTop: 4 }}>
-                                {explorationRadius.toLocaleString()}m
+                            <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '8px', 
+                                marginTop: 4,
+                                justifyContent: 'center'
+                            }}>
+                                <input
+                                    type="number"
+                                    min="10"
+                                    max="10000"
+                                    value={explorationRadius}
+                                    onChange={(e) => {
+                                        const value = parseInt(e.target.value);
+                                        if (value >= 10 && value <= 10000) {
+                                            setExplorationRadius(value);
+                                        }
+                                    }}
+                                    style={{
+                                        width: '80px',
+                                        padding: '4px 8px',
+                                        border: '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        textAlign: 'center'
+                                    }}
+                                />
+                                <span>m</span>
                             </div>
                         </div>
 
