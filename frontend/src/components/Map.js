@@ -87,14 +87,29 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
     const [explorationLimit, setExplorationLimit] = useState(10);
     const [explorationMarkers, setExplorationMarkers] = useState([]);
     const [explorationSidebarOpen, setExplorationSidebarOpen] = useState(false);
+    const [shouldZoom, setShouldZoom] = useState(false);
 
-    const CenterMap = ({ position }) => {
+    // Using CenterMap component to handle centering (for summary/full apis) and for zooming (for wiki/nearby api)
+    const CenterMap = ({ position, coordinates, shouldZoom }) => {
         const map = useMap();
         useEffect(() => {
             if (position && Array.isArray(position) && position.length === 2) {
             map.setView(position, map.getZoom());
             }
         }, [map, position]);
+
+
+        useEffect(() => {
+            if (coordinates && Array.isArray(coordinates) && coordinates.length > 0  && shouldZoom) {
+                const bounds = L.latLngBounds(coordinates);
+                map.flyToBounds(bounds, {
+                    padding: [50, 50],
+                    maxZoom: 16,
+                    duration: 3
+                });
+            }
+        }, [coordinates, map, shouldZoom]);
+
         return null;
     };
 
@@ -246,6 +261,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                         },
                         ...markers
                     ]);
+                    setShouldZoom(true);
                     console.log(`Found ${markers.length} nearby pages`); // Only backend results.
                 } else {
                     console.error('Failed to fetch nearby pages');
@@ -592,7 +608,11 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                     <ScaleControl position="bottomright" imperial={true} />
 
                     <ResizeHandler trigger={wikiWidth} />
-                    <CenterMap position={markerPosition} />
+                    <CenterMap 
+                        position={markerPosition}
+                        coordinates={explorationMarkers.map((marker) => marker.position)}
+                        shouldZoom={shouldZoom}
+                    />
                     {baseLayer === "satellite" && (
                     <>
                         <TileLayer
