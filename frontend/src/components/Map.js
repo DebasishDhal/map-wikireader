@@ -246,7 +246,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                         },
                         ...markers
                     ]);
-                    console.log(`Found ${markers.length} nearby pages`);
+                    console.log(`Found ${markers.length} nearby pages`); // Only backend results.
                 } else {
                     console.error('Failed to fetch nearby pages');
                 }
@@ -1049,7 +1049,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                                 fontSize: '14px',
                                 color: '#1976d2'
                             }}>
-                                Found {explorationMarkers.length} nearby pages
+                                Found <span style={{ fontWeight: 'bold' }}>{explorationMarkers.length-1}</span> nearby pages
                             </div>
                         )}
 
