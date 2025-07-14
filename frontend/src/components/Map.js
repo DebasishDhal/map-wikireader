@@ -1004,7 +1004,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                                 <input
                                     type="number"
                                     min="1"
-                                    max="10"
+                                    max={maxExplorationLimit}
                                     value={explorationRadius}
                                     onChange={(e) => {
                                         const value = parseInt(e.target.value);
