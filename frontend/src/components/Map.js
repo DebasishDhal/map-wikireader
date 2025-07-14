@@ -963,8 +963,9 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                             <button
                                 onClick={() => {
                                     setExplorationSidebarOpen(false);
-                                    setExplorationMode(false);
-                                    setExplorationMarkers([]);
+                                    // setExplorationMode(false); // even with exp. sidebar closed, you can do exploration normally.
+                                    // setExplorationMarkers([]);
+                                    setShouldZoom(false); // If this line is removed, it map automatically zooms after re-opening/closing the exp. sidebar
                                 }}
                                 style={{
                                     background: 'none',
