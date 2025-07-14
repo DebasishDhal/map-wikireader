@@ -26,6 +26,8 @@ L.Icon.Default.mergeOptions({
 // Add scale
 // L.control.scale().addTo(window.Map);
 
+const maxExplorationLimit = 50; // kilometers, the maximum amount user can select to explore.
+
 const ClickHandler = ({ onClick }) => {
     useMapEvents({
       click(e) {
@@ -83,7 +85,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
     const [countryBorders, setCountryBorders] = useState(null);
 
     const [explorationMode, setExplorationMode] = useState(false);
-    const [explorationRadius, setExplorationRadius] = useState(10000);
+    const [explorationRadius, setExplorationRadius] = useState(10);
     const [explorationLimit, setExplorationLimit] = useState(10);
     const [explorationMarkers, setExplorationMarkers] = useState([]);
     const [explorationSidebarOpen, setExplorationSidebarOpen] = useState(false);
@@ -238,14 +240,16 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                     body: JSON.stringify({
                         lat: lat,
                         lon: lon,
-                        radius: explorationRadius,
+                        radius: explorationRadius*1000,
                         limit: explorationLimit
                     }),
                 });
                 
                 if (res.ok) {
                     const data = await res.json();
-                    const markers = data.pages.map(page => ({
+                    const markers = data.pages.filter(
+                                page => typeof page.dist === "number" && page.dist <= explorationRadius * 1000
+                            ).map(page => ({
                         position: [page.lat, page.lon],
                         title: page.title,
                         distance: page.dist
@@ -963,8 +967,9 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                             <button
                                 onClick={() => {
                                     setExplorationSidebarOpen(false);
-                                    setExplorationMode(false);
-                                    setExplorationMarkers([]);
+                                    // setExplorationMode(false); // even with exp. sidebar closed, you can do exploration normally.
+                                    // setExplorationMarkers([]);
+                                    setShouldZoom(false); // If this line is removed, it map automatically zooms after re-opening/closing the exp. sidebar
                                 }}
                                 style={{
                                     background: 'none',
@@ -979,12 +984,12 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
 
                         <div>
                             <label style={{ fontWeight: 500, marginBottom: 8, display: 'block' }}>
-                                Search Radius (meters):
+                                Search Radius (km):
                             </label>
                             <input
                                 type="range"
-                                min="10"
-                                max="10000"
+                                min="1"
+                                max={maxExplorationLimit}
                                 value={explorationRadius}
                                 onChange={(e) => setExplorationRadius(parseInt(e.target.value))}
                                 style={{ width: '100%' }}
@@ -998,12 +1003,12 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                             }}>
                                 <input
                                     type="number"
-                                    min="10"
-                                    max="10000"
+                                    min="1"
+                                    max={maxExplorationLimit}
                                     value={explorationRadius}
                                     onChange={(e) => {
                                         const value = parseInt(e.target.value);
-                                        if (value >= 10 && value <= 10000) {
+                                        if (value >= 1 && value <= maxExplorationLimit) {
                                             setExplorationRadius(value);
                                         }
                                     }}
@@ -1015,7 +1020,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                                         textAlign: 'center'
                                     }}
                                 />
-                                <span>m</span>
+                                <span>km</span>
                             </div>
                         </div>
 
