@@ -83,7 +83,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
     const [countryBorders, setCountryBorders] = useState(null);
 
     const [explorationMode, setExplorationMode] = useState(false);
-    const [explorationRadius, setExplorationRadius] = useState(10000);
+    const [explorationRadius, setExplorationRadius] = useState(10);
     const [explorationLimit, setExplorationLimit] = useState(10);
     const [explorationMarkers, setExplorationMarkers] = useState([]);
     const [explorationSidebarOpen, setExplorationSidebarOpen] = useState(false);
@@ -238,7 +238,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                     body: JSON.stringify({
                         lat: lat,
                         lon: lon,
-                        radius: explorationRadius,
+                        radius: explorationRadius*1000,
                         limit: explorationLimit
                     }),
                 });
@@ -979,12 +979,12 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
 
                         <div>
                             <label style={{ fontWeight: 500, marginBottom: 8, display: 'block' }}>
-                                Search Radius (meters):
+                                Search Radius (km):
                             </label>
                             <input
                                 type="range"
-                                min="10"
-                                max="10000"
+                                min="1"
+                                max="10"
                                 value={explorationRadius}
                                 onChange={(e) => setExplorationRadius(parseInt(e.target.value))}
                                 style={{ width: '100%' }}
@@ -998,12 +998,12 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                             }}>
                                 <input
                                     type="number"
-                                    min="10"
-                                    max="10000"
+                                    min="1"
+                                    max="10"
                                     value={explorationRadius}
                                     onChange={(e) => {
                                         const value = parseInt(e.target.value);
-                                        if (value >= 10 && value <= 10000) {
+                                        if (value >= 1 && value <= 10) {
                                             setExplorationRadius(value);
                                         }
                                     }}
@@ -1015,7 +1015,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                                         textAlign: 'center'
                                     }}
                                 />
-                                <span>m</span>
+                                <span>km</span>
                             </div>
                         </div>
 
