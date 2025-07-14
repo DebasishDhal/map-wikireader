@@ -87,14 +87,29 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
     const [explorationLimit, setExplorationLimit] = useState(10);
     const [explorationMarkers, setExplorationMarkers] = useState([]);
     const [explorationSidebarOpen, setExplorationSidebarOpen] = useState(false);
+    const [shouldZoom, setShouldZoom] = useState(false);
 
-    const CenterMap = ({ position }) => {
+    // Using CenterMap component to handle centering (for summary/full apis) and for zooming (for wiki/nearby api)
+    const CenterMap = ({ position, coordinates, shouldZoom }) => {
         const map = useMap();
         useEffect(() => {
             if (position && Array.isArray(position) && position.length === 2) {
             map.setView(position, map.getZoom());
             }
         }, [map, position]);
+
+
+        useEffect(() => {
+            if (coordinates && Array.isArray(coordinates) && coordinates.length > 0  && shouldZoom) {
+                const bounds = L.latLngBounds(coordinates);
+                map.flyToBounds(bounds, {
+                    padding: [50, 50],
+                    maxZoom: 16,
+                    duration: 3
+                });
+            }
+        }, [coordinates, map, shouldZoom]);
+
         return null;
     };
 
@@ -246,7 +261,8 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                         },
                         ...markers
                     ]);
-                    console.log(`Found ${markers.length} nearby pages`);
+                    setShouldZoom(true);
+                    console.log(`Found ${markers.length} nearby pages`); // Only backend results.
                 } else {
                     console.error('Failed to fetch nearby pages');
                 }
@@ -592,7 +608,11 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                     <ScaleControl position="bottomright" imperial={true} />
 
                     <ResizeHandler trigger={wikiWidth} />
-                    <CenterMap position={markerPosition} />
+                    <CenterMap 
+                        position={markerPosition}
+                        coordinates={explorationMarkers.map((marker) => marker.position)}
+                        shouldZoom={shouldZoom}
+                    />
                     {baseLayer === "satellite" && (
                     <>
                         <TileLayer
@@ -965,13 +985,37 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                                 type="range"
                                 min="10"
                                 max="10000"
-                                step="1000"
                                 value={explorationRadius}
                                 onChange={(e) => setExplorationRadius(parseInt(e.target.value))}
                                 style={{ width: '100%' }}
                             />
-                            <div style={{ textAlign: 'center', marginTop: 4 }}>
-                                {explorationRadius.toLocaleString()}m
+                            <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '8px', 
+                                marginTop: 4,
+                                justifyContent: 'center'
+                            }}>
+                                <input
+                                    type="number"
+                                    min="10"
+                                    max="10000"
+                                    value={explorationRadius}
+                                    onChange={(e) => {
+                                        const value = parseInt(e.target.value);
+                                        if (value >= 10 && value <= 10000) {
+                                            setExplorationRadius(value);
+                                        }
+                                    }}
+                                    style={{
+                                        width: '80px',
+                                        padding: '4px 8px',
+                                        border: '1px solid #ccc',
+                                        borderRadius: '4px',
+                                        textAlign: 'center'
+                                    }}
+                                />
+                                <span>m</span>
                             </div>
                         </div>
 
@@ -1025,7 +1069,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                                 fontSize: '14px',
                                 color: '#1976d2'
                             }}>
-                                Found {explorationMarkers.length} nearby pages
+                                Found <span style={{ fontWeight: 'bold' }}>{explorationMarkers.length-1}</span> nearby pages
                             </div>
                         )}
 
