@@ -26,6 +26,8 @@ L.Icon.Default.mergeOptions({
 // Add scale
 // L.control.scale().addTo(window.Map);
 
+const maxExplorationLimit = 50; // kilometers, the maximum amount user can select to explore.
+
 const ClickHandler = ({ onClick }) => {
     useMapEvents({
       click(e) {
@@ -245,7 +247,9 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                 
                 if (res.ok) {
                     const data = await res.json();
-                    const markers = data.pages.map(page => ({
+                    const markers = data.pages.filter(
+                                page => typeof page.dist === "number" && page.dist <= explorationRadius * 1000
+                            ).map(page => ({
                         position: [page.lat, page.lon],
                         title: page.title,
                         distance: page.dist
@@ -985,7 +989,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                             <input
                                 type="range"
                                 min="1"
-                                max="10"
+                                max={maxExplorationLimit}
                                 value={explorationRadius}
                                 onChange={(e) => setExplorationRadius(parseInt(e.target.value))}
                                 style={{ width: '100%' }}
@@ -1004,7 +1008,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                                     value={explorationRadius}
                                     onChange={(e) => {
                                         const value = parseInt(e.target.value);
-                                        if (value >= 1 && value <= 10) {
+                                        if (value >= 1 && value <= maxExplorationLimit) {
                                             setExplorationRadius(value);
                                         }
                                     }}

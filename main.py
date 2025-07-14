@@ -2,12 +2,13 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-import requests
+import requests, httpx, asyncio
 from geopy.geocoders import Nominatim
 import geopy.distance
 from cachetools import TTLCache
 import os
 from dotenv import load_dotenv
+from backend.utils import generate_circle_centers
 
 load_dotenv()
 
@@ -25,7 +26,7 @@ class Geodistance(BaseModel):
 class NearbyWikiPage(BaseModel):
     lat: float = Field(default=54.163337, ge=-90, le=90)
     lon: float = Field(default=37.561109, ge=-180, le=180)
-    radius: int = Field(default=1000, ge=10, le=10000,description="Distance in meters from the reference point")
+    radius: int = Field(default=1000, ge=10, le=100_000,description="Distance in meters from the reference point")
     limit: int = Field(10, ge=1, description="Number of pages to return")
 
 app.add_middleware(
@@ -173,6 +174,18 @@ def get_geodistance(payload: Geodistance):
         status_code=200
     )
 
+
+async def fetch_url(client: httpx.AsyncClient, url: str):
+    try:
+        response = await client.get(url, timeout=10.0)
+        return {
+            "url": url,
+            "status": response.status_code,
+            "data": response.json() if response.status_code == 200 else None,
+        }
+    except Exception as e:
+        return {"url": url, "error": str(e)}
+    
 @app.post("/wiki/nearby")
 async def get_nearby_wiki_pages(payload: NearbyWikiPage):
     """
@@ -198,42 +211,82 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
             ],
             "count": 10 #Total no. of such pages
         }
+    Example raw respone from Wikipedia API: https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=40.7128%7C-74.0060&gsradius=10000&gslimit=1&format=json
     """
-    lat, lon = payload.lat, payload.lon
+    lat_center, lon_center = payload.lat, payload.lon
     radius = payload.radius
     limit = payload.limit
 
-    url = ("https://en.wikipedia.org/w/api.php"+"?action=query"
-            "&list=geosearch"
-            f"&gscoord={lat}|{lon}"
-            f"&gsradius={radius}"
-            f"&gslimit={limit}"
-            "&format=json")
-    print(url)
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code != 200:
+    if radius <= 10000:
+        url = ("https://en.wikipedia.org/w/api.php"+"?action=query"
+                "&list=geosearch"
+                f"&gscoord={lat_center}|{lon_center}"
+                f"&gsradius={radius}"
+                f"&gslimit={limit}"
+                "&format=json")
+        # print(url)
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code != 200:
+                return JSONResponse(
+                    content={"error": "Failed to fetch nearby pages"},
+                    status_code=500
+                )
+            data = response.json()
+
+            pages = data.get("query", {}).get("geosearch", [])
+
             return JSONResponse(
-                content={"error": "Failed to fetch nearby pages"},
+                content={
+                    "pages": pages,
+                    "count": len(pages)
+                },
+                status_code=200
+            )
+        except Exception as e:
+            return JSONResponse(
+                content={"error": str(e)},
                 status_code=500
             )
-        data = response.json()
+    elif radius > 10000:
+        small_circle_centers = generate_circle_centers(lat_center, lon_center, radius / 1000, small_radius_km=10)
+        all_pages = []
+        base_url = "https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord={lat}|{lon}&gsradius={small_radius_km}&gslimit={page_limit}&format=json"
+        urls = [base_url.format(lat=center[0], lon=center[1], small_radius_km=10*1000, page_limit=100) for center in small_circle_centers]
 
-        pages = data.get("query", {}).get("geosearch", [])
+        print("URL Counts:", len(urls))
+        try:
+            async with httpx.AsyncClient() as client:
+                tasks = [fetch_url(client, url) for url in urls]
+                results = await asyncio.gather(*tasks)
+            
+            # print(results)
+            for result in results:
+                for unit in result.get("data", {}).get("query", {}).get("geosearch", []):
+                    lat, lon = unit.get("lat"), unit.get("lon")
+                    if lat is not None and lon is not None:
+                        dist = int(geopy.distance.distance(
+                                (lat_center, lon_center), (lat, lon)
+                            ).m)
+                        print(dist)
+                    else: 
+                        dist = None
 
-        return JSONResponse(
-            content={
-                "pages": pages,
-                "count": len(pages)
-            },
-            status_code=200
-        )
-    except Exception as e:
-        return JSONResponse(
-            content={"error": str(e)},
-            status_code=500
-        )
-    
+                    unit_with_dist = {**unit, "dist": dist}
+                    all_pages.append(unit_with_dist)
+
+            return JSONResponse(
+                content={
+                    "pages": all_pages,
+                    "count": len(all_pages)
+                }
+            )
+        
+        except Exception as e:
+            return JSONResponse(
+                content={"error": str(e)},
+                status_code=500
+        )    
 
 
 
