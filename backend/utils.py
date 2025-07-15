@@ -8,7 +8,7 @@ def generate_circle_centers(center_lat, center_lon, radius_km, small_radius_km=1
         - center_lat: Latitude of the center of the larger circle
         - center_lon: Longitude of the center of the larger circle
         - radius_km: Radius of the larger circle in kilometers
-        - small_radius_km: Radius of the smaller circles in kilometers (default 15km)
+        - small_radius_km: Radius of the smaller circles in kilometers (default 10km, more than that wiki api cannot accomodate)
 
         Output:
         - A list of tuples, each containing the latitude and longitude of a small circle's center. [(lat1, lon1), (lat2, lon2),...]

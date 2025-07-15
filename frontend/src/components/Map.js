@@ -102,7 +102,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
 
 
         useEffect(() => {
-            if (coordinates && Array.isArray(coordinates) && coordinates.length > 0  && shouldZoom) {
+            if (coordinates && Array.isArray(coordinates) && coordinates.length > 1  && shouldZoom) {
                 const bounds = L.latLngBounds(coordinates);
                 map.flyToBounds(bounds, {
                     padding: [50, 50],
