@@ -247,9 +247,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                 
                 if (res.ok) {
                     const data = await res.json();
-                    const markers = data.pages.filter(
-                                page => typeof page.dist === "number" && page.dist <= explorationRadius * 1000
-                            ).map(page => ({
+                    const markers = data.pages.map(page => ({
                         position: [page.lat, page.lon],
                         title: page.title,
                         distance: page.dist
