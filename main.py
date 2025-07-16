@@ -162,7 +162,6 @@ def get_geodistance(payload: Geodistance):
             content={"error": str(e)},
             status_code=500
         )
-
     return JSONResponse(
         content={
             "distance": distance,

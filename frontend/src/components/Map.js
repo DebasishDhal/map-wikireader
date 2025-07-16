@@ -92,7 +92,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
     const [shouldZoom, setShouldZoom] = useState(false);
 
     // Using CenterMap component to handle centering (for summary/full apis) and for zooming (for wiki/nearby api)
-    const CenterMap = ({ position, coordinates, shouldZoom }) => {
+    const CenterMap = ({ position, coordinates, shouldZoom, setShouldZoom }) => {
         const map = useMap();
         useEffect(() => {
             if (position && Array.isArray(position) && position.length === 2) {
@@ -109,8 +109,9 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                     maxZoom: 16,
                     duration: 3
                 });
+                setShouldZoom(false);
             }
-        }, [coordinates, map, shouldZoom]);
+        }, [coordinates, map, shouldZoom, setShouldZoom]);
 
         return null;
     };
@@ -614,6 +615,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                         position={markerPosition}
                         coordinates={explorationMarkers.map((marker) => marker.position)}
                         shouldZoom={shouldZoom}
+                        setShouldZoom={setShouldZoom}
                     />
                     {baseLayer === "satellite" && (
                     <>
