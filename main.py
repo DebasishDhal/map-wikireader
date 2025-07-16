@@ -8,7 +8,7 @@ import geopy.distance
 from cachetools import TTLCache
 import os
 from dotenv import load_dotenv
-from random import shuffle
+from random import sample
 from backend.utils import generate_circle_centers, fetch_url
 
 load_dotenv()
@@ -230,6 +230,9 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
 
             pages = data.get("query", {}).get("geosearch", [])
 
+            if len(pages) > limit:
+                pages = sample(pages, limit)
+
             return JSONResponse(
                 content={
                     "pages": pages,
@@ -244,12 +247,11 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
             )
         
     elif radius > wiki_geosearch_radius_limit_meters:
-        print(radius)
-        small_circle_centers = generate_circle_centers(lat_center, lon_center, radius / 1000, small_radius_km=10)
         all_pages = []
+
+        small_circle_centers = generate_circle_centers(lat_center, lon_center, radius / 1000, small_radius_km=10)
         base_url = "https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord={lat}|{lon}&gsradius={small_radius_km}&gslimit={page_limit}&format=json"
         urls = [base_url.format(lat=center[0], lon=center[1], small_radius_km=wiki_geosearch_radius_limit_meters, page_limit=100) for center in small_circle_centers]
-        shuffle(urls) # If # available pages > # requested pages by user, randomize the results to avoid clustering around a single direction.
 
         print("URL Counts:", len(urls))
         try:
@@ -259,15 +261,14 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
             
             # print(results)
             for result in results:
+
                 for unit in result.get("data", {}).get("query", {}).get("geosearch", []):
-                    if len(all_pages) >= limit:
-                        break
+
                     lat, lon = unit.get("lat"), unit.get("lon")
                     if lat is not None and lon is not None:
                         dist = int(geopy.distance.distance(
                                 (lat_center, lon_center), (lat, lon)
                             ).m)
-                        # print(dist)
                     else: 
                         dist = None
 
@@ -277,7 +278,8 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
                     unit_with_dist = {**unit, "dist": dist}
                     all_pages.append(unit_with_dist)
 
-            # print(all_pages)
+            if len(all_pages) > limit:
+                all_pages = sample(all_pages, limit)
 
             return JSONResponse(
                 content={
