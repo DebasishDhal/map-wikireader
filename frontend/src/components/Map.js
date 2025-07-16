@@ -90,9 +90,10 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
     const [explorationMarkers, setExplorationMarkers] = useState([]);
     const [explorationSidebarOpen, setExplorationSidebarOpen] = useState(false);
     const [shouldZoom, setShouldZoom] = useState(false);
+    const [zoomDelaySeconds, setZoomDelaySeconds] = useState(3); // Default zoom delay in seconds
 
     // Using CenterMap component to handle centering (for summary/full apis) and for zooming (for wiki/nearby api)
-    const CenterMap = ({ position, coordinates, shouldZoom }) => {
+    const CenterMap = ({ position, coordinates, shouldZoom, setShouldZoom, zoomDelaySeconds }) => {
         const map = useMap();
         useEffect(() => {
             if (position && Array.isArray(position) && position.length === 2) {
@@ -102,15 +103,24 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
 
 
         useEffect(() => {
-            if (coordinates && Array.isArray(coordinates) && coordinates.length > 0  && shouldZoom) {
+            if (coordinates && Array.isArray(coordinates) && coordinates.length > 1  && shouldZoom) {
                 const bounds = L.latLngBounds(coordinates);
-                map.flyToBounds(bounds, {
-                    padding: [50, 50],
-                    maxZoom: 16,
-                    duration: 3
-                });
+                console.log("Delay:", zoomDelaySeconds);
+                if (zoomDelaySeconds > 0) {
+                    map.flyToBounds(bounds, {
+                        padding: [50, 50],
+                        maxZoom: 16,
+                        duration: zoomDelaySeconds
+                    });
+                } else {
+                    map.fitBounds(bounds, {
+                        padding: [50, 50],
+                        maxZoom: 16
+                    });
+                }
+                setShouldZoom(false);
             }
-        }, [coordinates, map, shouldZoom]);
+        }, [coordinates, map, shouldZoom, setShouldZoom, zoomDelaySeconds]);
 
         return null;
     };
@@ -247,9 +257,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                 
                 if (res.ok) {
                     const data = await res.json();
-                    const markers = data.pages.filter(
-                                page => typeof page.dist === "number" && page.dist <= explorationRadius * 1000
-                            ).map(page => ({
+                    const markers = data.pages.map(page => ({
                         position: [page.lat, page.lon],
                         title: page.title,
                         distance: page.dist
@@ -616,6 +624,8 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                         position={markerPosition}
                         coordinates={explorationMarkers.map((marker) => marker.position)}
                         shouldZoom={shouldZoom}
+                        setShouldZoom={setShouldZoom}
+                        zoomDelaySeconds={zoomDelaySeconds}
                     />
                     {baseLayer === "satellite" && (
                     <>
@@ -1039,6 +1049,25 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                             />
                             <div style={{ textAlign: 'center', marginTop: 4 }}>
                                 {explorationLimit} results
+                            </div>
+                        </div>
+
+
+                        <div>
+                            <label style={{ fontWeight: 500, marginBottom: 8, display: 'block' }}>
+                                Zoom Delay (seconds):
+                            </label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="5"
+                                step="1"
+                                value={zoomDelaySeconds}
+                                onChange={(e) => setZoomDelaySeconds(parseInt(e.target.value))}
+                                style={{ width: '100%' }}
+                            />
+                            <div style={{ textAlign: 'center', marginTop: 4 }}>
+                                {zoomDelaySeconds} sec. zoom duration
                             </div>
                         </div>
 
