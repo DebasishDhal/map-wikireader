@@ -1,4 +1,4 @@
-import geodesic from 'geographiclib-geodesic';
+import LatLon from 'geodesy/latlon-spherical.js';
 // Haversine-based geodesic interpolator
 function generateGeodesicPoints(lat1, lon1, lat2, lon2, numPoints = 512) {
     /**
@@ -46,26 +46,26 @@ function generateGeodesicPoints(lat1, lon1, lat2, lon2, numPoints = 512) {
 }
 
 
-
 function calculatePolygonArea(coords) {
-    /*** Calculate the geodesic area of a polygon on the WGS84 ellipsoid.
-     * @param {Array<Array<number>>} coords - Array of [lat, lon] pairs.
-     * @returns {number} Area in square meters.
-    */
-//   console.log(coords); // Lifesaver
-  const geod = geodesic.Geodesic.WGS84;
-  const poly = geod.Polygon(false); // false = polygon, not polyline
+    if (!coords || coords.length < 3) return { area: 0, perimeter: 0 };
 
-  for (const [lat, lon] of coords) {
-    poly.AddPoint(lat, lon);
-  }
+    let area = 0;
+    let perimeter = 0;
 
-  // Closing the polygon is not required as I am already doing it in the frontend.
+    const latlonPoints = coords.map(c => new LatLon(c[0], c[1]));
 
-  const result = poly.Compute(); // Returns object (number (of vertices), perimeter, area)
-  //console.log(result)
-  return {area: result.area, perimeter: result.perimeter}; // area in square meters, important.
+    for (let i = 0; i < latlonPoints.length; i++) {
+        const p1 = latlonPoints[i];
+        const p2 = latlonPoints[(i + 1) % latlonPoints.length];
+
+        perimeter += p1.distanceTo(p2); // in meters
+    }
+
+    area = LatLon.areaOf(latlonPoints); // in square meters
+
+    return { "area":area, "perimeter": perimeter };
 }
+
 
 function getPolygonCentroid(points) {
     // Simple centroid calculation for small polygons
