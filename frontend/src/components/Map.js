@@ -23,8 +23,6 @@ L.Icon.Default.mergeOptions({
     iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
-// Add scale
-// L.control.scale().addTo(window.Map);
 
 const maxExplorationLimit = 50; // kilometers, the maximum amount user can select to explore.
 
@@ -223,7 +221,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
               console.error("Error fetching Wikipedia content:", error);
             }
           }, [contentType]);
-    // const markerPosition = [21.2514, 81.6296];
+
     useEffect(() => {
         if (searchQuery) {
             fetchWiki(searchQuery);
@@ -239,49 +237,50 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
         setWikiWidth(20);
     };
 
-    const handleMapClick = useCallback(async (lat, lon) => {
-        if (explorationMode) {
-            // Handle exploration mode click
-            try {
-                const res = await fetch(`${BACKEND_URL}/wiki/nearby`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        lat: lat,
-                        lon: lon,
-                        radius: explorationRadius*1000,
-                        limit: explorationLimit
-                    }),
-                });
-                
-                if (res.ok) {
-                    const data = await res.json();
-                    const markers = data.pages.map(page => ({
-                        position: [page.lat, page.lon],
-                        title: page.title,
-                        distance: page.dist
-                    }));
-                    // setExplorationMarkers(markers);
-                    // Now adding the main clicked point
-                    setExplorationMarkers([
-                        {
-                            position: [lat, lon],
-                            title: 'Clicked Location',
-                            distance: 0,
-                            isClickedPoint: true
-                        },
-                        ...markers
-                    ]);
-                    setShouldZoom(true);
-                    console.log(`Found ${markers.length} nearby pages`); // Only backend results.
-                } else {
-                    console.error('Failed to fetch nearby pages');
-                }
-            } catch (err) {
-                console.error('Error fetching nearby pages:', err);
+    const handleExplorationClick = useCallback(async (lat, lon) => {
+        try{
+            const res = await fetch(`${BACKEND_URL}/wiki/nearby`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lat: lat,
+                    lon: lon,
+                    radius: explorationRadius*1000,
+                    limit: explorationLimit
+                }),
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                const markers = data.pages.map(page => ({
+                    position: [page.lat, page.lon],
+                    title: page.title,
+                    distance: page.dist
+                }));
+                // setExplorationMarkers(markers);
+                // Now adding the main clicked point
+                setExplorationMarkers([
+                    {
+                        position: [lat, lon],
+                        title: 'Clicked Location',
+                        distance: 0,
+                        isClickedPoint: true
+                    },
+                    ...markers
+                ]);
+                setShouldZoom(true);
+                console.log(`Found ${markers.length} nearby pages`); // Only backend results.
+            } else {
+                console.error('Failed to fetch nearby pages');
             }
-        } else if (geoToolMode === "distance") {
-            const updatedPoints = [...geoPoints, { lat, lon }];
+        } catch (err) {
+            console.error('Error fetching nearby pages:', err);
+        }
+        
+    }, [explorationRadius, explorationLimit, setExplorationMarkers, setShouldZoom]);
+
+    const handleDistanceClick = useCallback(async (lat, lon) => {
+        const updatedPoints = [...geoPoints, { lat, lon }];
             if (updatedPoints.length > 2) {
               updatedPoints.shift(); // keep only two
             }
@@ -311,17 +310,26 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                 setGeoDistance(null);
               }
             }
-        } else if (geoToolMode === "area") {
-            const updated = [...areaPoints, [lat, lon]];
-            setAreaPoints(updated);
-        }
+    }, [geoPoints, geoUnit, setGeoPoints, setGeoDistance, setGeoSidebarOpen]);
 
+    const handleAreaClick = useCallback((lat, lon) => {
+        const updated = [...areaPoints, [lat, lon]];
+        setAreaPoints(updated);
+    }, [areaPoints, setAreaPoints]);
+
+    const handleMapClick = useCallback(async (lat, lon) => {
+        if (explorationMode) {
+            await handleExplorationClick(lat, lon);
+        } else if (geoToolMode === "distance") {
+            await handleDistanceClick(lat, lon);
+        } else if (geoToolMode === "area") {
+            handleAreaClick(lat, lon);
+        }
         else {
-            // setMarkerPosition([lat, lon]);
             console.log("Invalid tool mode:", geoToolMode);
         }
 
-    }, [explorationMode, explorationRadius, explorationLimit, geoToolMode, geoPoints, geoUnit, areaPoints]);
+    }, [explorationMode, geoToolMode, handleExplorationClick, handleDistanceClick, handleAreaClick]);
 
     useEffect(() => {
         if (geoPoints.length === 2) {
@@ -374,7 +382,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
             const {area, perimeter} = calculatePolygonArea(closed); // This took me a while to figure out, it should be just (lat, lon), not (lon, lat)
             setPolygonArea(area);
             setPolygonPerimeter(perimeter);
-            // console.log("Polygon area:", area, "Perimeter:", perimeter);
+
         } else {
             setPolygonArea(null);
             setPolygonPerimeter(null);
@@ -433,7 +441,6 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
         return lines;
       };
 
-    // const longitudeLines = generateLongitudeLines(30, 1);
 
 
     return (
