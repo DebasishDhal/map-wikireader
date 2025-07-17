@@ -88,9 +88,6 @@ function formatArea(area, unit = 'sqm', format = "normal") {
         case "ha":
             value = area / 1e4;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' ha';
-        case "sqm":
-            value = area;
-            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m²';
         case "acres":
             value = area / 4046.8564224;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' acres';
@@ -100,6 +97,7 @@ function formatArea(area, unit = 'sqm', format = "normal") {
         case "sqft":
             value = area * 10.76391041671;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' ft²';
+        case "sqm":
         default:
             value = area;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m²';
@@ -113,20 +111,16 @@ function formatPerimeter(perimeter, unit = 'sqm', format = "normal") {
     let value;
     switch (unit) {
         case "km2":
-            value = perimeter / 1000;
-            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' km';
         case "ha":
             value = perimeter / 1000;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' km';
-        case "m2":
-            value = perimeter;
-            return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m';
         case "mi2":
             value = perimeter / 1609.344;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' mi';
         case "sqft":
             value = perimeter * 3.280839895013123; // meters to feet
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' ft';
+        case "m2":
         default:
             value = perimeter;
             return (format === "scientific" ? value.toExponential(2) : value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })) + ' m';
@@ -134,4 +128,3 @@ function formatPerimeter(perimeter, unit = 'sqm', format = "normal") {
 }
 
 export {generateGeodesicPoints, calculatePolygonArea, getPolygonCentroid, formatArea, formatPerimeter};
-    // calculatePolygonArea

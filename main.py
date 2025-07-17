@@ -58,7 +58,8 @@ async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundT
         # print("Cache hit for summary:", page_name) #Working
         return JSONResponse(content=summary_cache[summary_page_name], status_code=200)
     try:
-        response = requests.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{summary_page_name}", timeout=10)
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{summary_page_name}", timeout=10)
 
         if response.status_code != 200:
             return JSONResponse(
@@ -102,7 +103,8 @@ async def search_wiki_full_page(full_page: str, background_tasks: BackgroundTask
         # print("Cache hit for full_page:", full_page) #Working
         return JSONResponse(content=full_page_cache[full_page], status_code=200)
     
-    response = requests.get(f"https://en.wikipedia.org/wiki/{full_page}", timeout=10)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"https://en.wikipedia.org/wiki/{full_page}", timeout=10)
     try:
         if response.status_code != 200:
             return JSONResponse(
@@ -217,9 +219,10 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
                 f"&gsradius={radius}"
                 f"&gslimit={limit}"
                 "&format=json")
-        # print(url)
+
         try:
-            response = requests.get(url, timeout=10)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, timeout=10)
             if response.status_code != 200:
                 return JSONResponse(
                     content={"error": "Failed to fetch nearby pages"},
@@ -258,7 +261,6 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
                 tasks = [fetch_url(client, url) for url in urls]
                 results = await asyncio.gather(*tasks)
             
-            # print(results)
             for result in results:
 
                 for unit in result.get("data", {}).get("query", {}).get("geosearch", []):

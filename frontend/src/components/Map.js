@@ -48,7 +48,7 @@ const ResizeHandler = ({ trigger }) => {
     }, [trigger, map]);
     return null;
 };
-const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmittedQuery } ) => {
+const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmittedQuery } ) => {
     const [baseLayer, setBaseLayer] = useState("base"); // "base" | "satellite"
 
     const [markerPosition, setMarkerPosition] = useState(null);
@@ -182,7 +182,7 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
 
             if (contentType === 'summary') {
                 setWikiContent(data);
-                if (data && data.latitude && data.longitude) {
+                if (data?.latitude && data?.longitude) {
                   setMarkerPosition([data.latitude, data.longitude]);
                 }
               } else if (contentType === 'full') {
@@ -210,9 +210,8 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
                 const blob = new Blob([htmlContent], { type: 'text/html' });
                 const blobUrl = URL.createObjectURL(blob);
                 setIframeSrc(blobUrl);
-                // const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent);
-                // setIframeSrc(dataUrl);;
-                if (data && data.latitude && data.longitude) {
+
+                if (data?.latitude && data?.longitude) {
                   setMarkerPosition([data.latitude, data.longitude]);
                 }
               }
@@ -1376,4 +1375,4 @@ const Map = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmitt
 };
 
 
-export default Map;
+export default WikiMap;

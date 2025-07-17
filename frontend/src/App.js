@@ -1,11 +1,11 @@
 // import logo from './logo.svg';
 import './App.css';
-import Map from './components/Map';
+import WikiMap from './components/Map';
 import React, { useState, 
   // useEffect,
   //  useCallback
    } from 'react';
-// import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
+
 
 
 function App() {
@@ -44,7 +44,7 @@ function App() {
           <button type="submit">Search</button>
         </form>
       </div>
-      <Map 
+      <WikiMap 
         onMapClick={handleMapClick} 
         searchQuery={submittedQuery}
         contentType={contentType}
