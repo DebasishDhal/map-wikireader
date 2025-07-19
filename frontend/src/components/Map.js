@@ -36,8 +36,9 @@ const ClickHandler = ({ onClick }) => {
     return null;
 };
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8004';
-console.log(BACKEND_URL);
+const rawUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8004';
+const BACKEND_URL = rawUrl.replace(/\/$/, ''); 
+// console.log(BACKEND_URL);
 
 const ResizeHandler = ({ trigger }) => {
     const map = useMap();
