@@ -1,6 +1,7 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.openapi.docs import get_swagger_ui_html
 from pydantic import BaseModel, Field
 import requests, httpx, asyncio
 from geopy.geocoders import Nominatim
@@ -10,10 +11,16 @@ import os
 from dotenv import load_dotenv
 from random import sample
 from backend.utils import generate_circle_centers, fetch_url
+from mangum import Mangum
+
 
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(
+    # docs_url=None,
+    # redoc_url=None,
+    # openapi_url=None
+)
 
 loc = Nominatim(user_agent="GetLoc")
 
@@ -30,10 +37,15 @@ class NearbyWikiPage(BaseModel):
     radius: int = Field(default=1000, ge=10, le=100_000,description="Distance in meters from the reference point")
     limit: int = Field(10, ge=1, description="Number of pages to return")
 
+# frontend_urls = origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "").split(", ") if origin.strip()
+frontend_urls = os.getenv("ALLOWED_ORIGINS", "").split(", ")
+
 app.add_middleware(
+
     CORSMiddleware,
-    allow_origins=["*"],  # Replace with your frontend domain in prod
-    allow_credentials=False,
+    # allow_origins=["*"],
+    allow_origins=frontend_urls,  # Replace with your frontend domain in prod
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -45,6 +57,26 @@ full_page_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)
 @app.get("/")
 def health_check():
     return {"status": "ok"}
+
+# @app.get("/docs", include_in_schema=False)
+# async def custom_swagger_ui_html(request: Request):
+#     origin = request.headers.get("origin")
+#     if origin and origin not in frontend_urls:
+#         return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+
+#     return get_swagger_ui_html(
+#         openapi_url=app.openapi_url,
+#         title=app.title + " - Swagger UI"
+#     )
+
+# @app.get("/openapi.json")
+# async def get_open_api_endpoint(request: Request):
+#     origin = request.headers.get("origin")
+    
+#     if origin and origin not in frontend_urls:
+#         return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+
+#     return JSONResponse(app.openapi())
 
 @app.get("/wiki/search/summary/{summary_page_name}")
 async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundTasks):
@@ -318,7 +350,11 @@ def random():
     return JSONResponse(
         content={
             "pages": pages,
-            "count": len(pages)
+            "count": len(pages),
+            # "urls": frontend_urls
         },
         status_code=200
     )
+
+
+lambda_handler = Mangum(app)
