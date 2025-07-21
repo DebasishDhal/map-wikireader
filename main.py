@@ -11,11 +11,41 @@ from dotenv import load_dotenv
 from random import sample
 from backend.utils import generate_circle_centers, fetch_url
 
-load_dotenv()
+
+def load_environment():
+    """
+    Load environment variables from a .env file based on the mode (development or production).
+    """
+    dotenv_path = ".env" 
+    load_dotenv(dotenv_path) 
+
+    mode = os.getenv("MODE", "").lower()
+
+    if mode in ["development", "dev"]:
+        dotenv_path = ".env.development"
+    elif mode in ["production", "prod"]:
+        dotenv_path = ".env.production"
+    else:
+        dotenv_path = ".env" # This is for lambda function where .env is used
+    print("Loading environment variables from:", dotenv_path)
+    if os.path.exists(dotenv_path):
+        load_dotenv(dotenv_path)
+        return {"status": "ok"}
+
+    return {"status": "error"}
+
+
+
+loadenv_response = load_environment()
+if loadenv_response.get("status") == "error":
+    print("Error loading environment variables. Please check the .env file.")
+    exit(1)
 
 app = FastAPI()
 
 loc = Nominatim(user_agent="GetLoc")
+
+frontend_urls = os.getenv("ALLOWED_ORIGINS", "").split(", ")
 
 class Geodistance(BaseModel):
     lat1: float = Field(..., ge=-90, le=90)
@@ -32,8 +62,8 @@ class NearbyWikiPage(BaseModel):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace with your frontend domain in prod
-    allow_credentials=False,
+    allow_origins=frontend_urls,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -78,7 +108,7 @@ async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundT
                 "longitude": coords.longitude if coords else None
             }
         
-        background_tasks.add_task(lambda: summary_cache.__setitem__(summary_page_name, result))
+        # background_tasks.add_task(lambda: summary_cache.__setitem__(summary_page_name, result))
 
 
         return JSONResponse(
@@ -123,7 +153,7 @@ async def search_wiki_full_page(full_page: str, background_tasks: BackgroundTask
                         "longitude": coords.longitude if coords else None
                 }
         
-        background_tasks.add_task(lambda: full_page_cache.__setitem__(full_page, result))
+        # background_tasks.add_task(lambda: full_page_cache.__setitem__(full_page, result))
 
         return JSONResponse(
             content= result,
