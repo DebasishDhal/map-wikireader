@@ -1,0 +1,87 @@
+name: Deploy Frontend and Backend
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      LAMBDA_FUNCTION: ${{ secrets.AWS_LAMBDA_FUNCTION }}
+      REACT_APP_BACKEND_URL: ${{ secrets.REACT_APP_BACKEND_URL }}
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # ------------------ FRONTEND ------------------
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    - name: Create .env for frontend
+      run: echo "REACT_APP_BACKEND_URL=${{ secrets.REACT_APP_BACKEND_URL }}" > frontend/.env
+
+    - name: Install frontend deps and build
+      working-directory: frontend
+      run: |
+        npm ci
+        npm run build
+
+    - name: Upload frontend build to S3
+      uses: aws-actions/aws-cli@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+        inlineScript: |
+          aws s3 sync frontend/build/ s3://${{ env.S3_BUCKET }}/ --delete
+
+    # ------------------ BACKEND ------------------
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install pipx and deps for backend lambda packaging
+      run: python -m pip install --upgrade pip pipx
+
+    - name: Prepare lambda_build folder
+      run: |
+        mkdir -p lambda_build
+        cp main.py lambda_build/lambda_function.py
+        cp -r backend lambda_build/backend
+
+    - name: Install backend dependencies for Lambda
+      run: |
+        while IFS= read -r line; do
+          pip install "$line" \
+            --platform manylinux2014_x86_64 \
+            --target=lambda_build \
+            --implementation cp \
+            --python-version 3.11 \
+            --only-binary=:all: \
+            --upgrade
+        done < requirements.txt
+
+    - name: Zip Lambda Package
+      run: |
+        cd lambda_build
+        zip -r ../lambda_payload.zip .
+
+    - name: Deploy to AWS Lambda
+      uses: aws-actions/aws-cli-action@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+        inlineScript: |
+          aws lambda update-function-code \
+            --function-name ${{ env.LAMBDA_FUNCTION }} \
+            --zip-file fileb://lambda_payload.zip

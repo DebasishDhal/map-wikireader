@@ -1252,7 +1252,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                                         {numberFormat === 'scientific'
                                             ? geoDistance.toExponential(2)
                                             : geoDistance.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
-                                        }
+                                        } {geoUnit}
                                     </div>
                                 )}
                                 <button
