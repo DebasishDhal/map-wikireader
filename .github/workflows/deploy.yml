@@ -14,74 +14,90 @@ jobs:
       REACT_APP_BACKEND_URL: ${{ secrets.REACT_APP_BACKEND_URL }}
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    # ------------------ FRONTEND ------------------
+      # ------------------ FRONTEND ------------------
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '20'
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
 
-    - name: Create .env for frontend
-      run: echo "REACT_APP_BACKEND_URL=${{ secrets.REACT_APP_BACKEND_URL }}" > frontend/.env
+      - name: Create .env for frontend
+        run: echo "REACT_APP_BACKEND_URL=${{ secrets.REACT_APP_BACKEND_URL }}" > frontend/.env
 
-    - name: Install frontend deps and build
-      working-directory: frontend
-      run: |
-        npm ci
-        npm run build
+      - name: Install frontend deps and build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
 
-    - name: Upload frontend build to S3
-      uses: aws-actions/aws-cli@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-        inlineScript: |
-          aws s3 sync frontend/build/ s3://${{ env.S3_BUCKET }}/ --delete
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-    # ------------------ BACKEND ------------------
+      - name: Sync frontend build to S3
+        run: aws s3 sync frontend/build/ s3://${{ secrets.AWS_S3_BUCKET }}/ --delete
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      # ------------------ BACKEND ------------------
 
-    - name: Install pipx and deps for backend lambda packaging
-      run: python -m pip install --upgrade pip pipx
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Prepare lambda_build folder
-      run: |
-        mkdir -p lambda_build
-        cp main.py lambda_build/lambda_function.py
-        cp -r backend lambda_build/backend
+      - name: Install pipx and deps for backend lambda packaging
+        run: python -m pip install --upgrade pip pipx
 
-    - name: Install backend dependencies for Lambda
-      run: |
-        while IFS= read -r line; do
-          pip install "$line" \
-            --platform manylinux2014_x86_64 \
-            --target=lambda_build \
-            --implementation cp \
-            --python-version 3.11 \
-            --only-binary=:all: \
-            --upgrade
-        done < requirements.txt
+      - name: Prepare lambda_build folder
+        run: |
+          mkdir -p lambda_build
+          cp main.py lambda_build/lambda_function.py
+          cp -r backend lambda_build/backend
 
-    - name: Zip Lambda Package
-      run: |
-        cd lambda_build
-        zip -r ../lambda_payload.zip .
+      - name: Install backend dependencies for Lambda (with logging)
+        run: |
+          set -e
+          echo "Installing packages... ✔️"
+          while IFS= read -r pkg || [[ -n "$pkg" ]]; do
+            if [[ -z "${pkg// }" ]]; then
+              continue  # skip empty lines or spaces
+            fi
+            echo "==> Installing: $pkg"
+            if pip install "$pkg" \
+                --platform manylinux2014_x86_64 \
+                --target=lambda_build \
+                --implementation cp \
+                --python-version 3.11 \
+                --only-binary=:all: \
+                --upgrade; then
+              echo "✅ Installed: $pkg"
+            else
+              echo "❌ Failed to install: $pkg" >&2
+            fi
+          done < requirements.txt
 
-    - name: Deploy to AWS Lambda
-      uses: aws-actions/aws-cli-action@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-        inlineScript: |
+          # Verification: check for missing modules
+          echo "🔍 Verifying installations in lambda_build:"
+          for mod in $(cut -d'=' -f1 requirements.txt); do
+            if [ -d "lambda_build/${mod}" ] || [ -f "lambda_build/${mod}.py" ] || ls lambda_build/${mod}*.dist-info >/dev/null 2>&1; then
+              echo "✔️  $mod present"
+            else
+              echo "⚠️  $mod missing in lambda_build"
+            fi
+          done
+
+      - name: Zip Lambda Package
+        run: |
+          cd lambda_build
+          zip -r ../lambda_payload.zip .
+
+      - name: Deploy to AWS Lambda
+        run: |
           aws lambda update-function-code \
-            --function-name ${{ env.LAMBDA_FUNCTION }} \
+            --function-name ${{ secrets.AWS_LAMBDA_FUNCTION }} \
             --zip-file fileb://lambda_payload.zip
