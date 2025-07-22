@@ -34,7 +34,7 @@ jobs:
         npm run build
 
     - name: Upload frontend build to S3
-      uses: aws-actions/aws-cli-action@v1
+      uses: aws-actions/aws-cli@v1
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
