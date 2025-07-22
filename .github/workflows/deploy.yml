@@ -76,13 +76,15 @@ jobs:
         cd lambda_build
         zip -r ../lambda_payload.zip .
 
-    - name: Deploy to AWS Lambda
-      uses: aws-actions/aws-cli-action@v1
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-        inlineScript: |
-          aws lambda update-function-code \
-            --function-name ${{ env.LAMBDA_FUNCTION }} \
-            --zip-file fileb://lambda_payload.zip
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Deploy to AWS Lambda
+      run: |
+        aws lambda update-function-code \
+          --function-name ${{ secrets.AWS_LAMBDA_FUNCTION }} \
+          --zip-file fileb://lambda_payload.zip
