@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks, Request
+from fastapi import FastAPI, BackgroundTasks, Request, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -42,7 +42,18 @@ if loadenv_response.get("status") == "error":
     print("Error loading environment variables. Please check the .env file.")
     exit(1)
 
-app = FastAPI()
+if os.getenv("MODE") == "production":
+    app = FastAPI(
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
+elif os.getenv("MODE") == "development":
+    app = FastAPI()
+
+else:
+    print("Invalid mode. Please check the .env file.")
+    exit(1)
 
 loc = Nominatim(user_agent="GetLoc")
 
@@ -80,26 +91,6 @@ full_page_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)
 @app.get("/")
 def health_check():
     return {"status": "ok"}
-
-# @app.get("/docs", include_in_schema=False)
-# async def custom_swagger_ui_html(request: Request):
-#     origin = request.headers.get("origin")
-#     if origin and origin not in frontend_urls:
-#         return JSONResponse(status_code=403, content={"detail": "Forbidden"})
-
-#     return get_swagger_ui_html(
-#         openapi_url=app.openapi_url,
-#         title=app.title + " - Swagger UI"
-#     )
-
-# @app.get("/openapi.json")
-# async def get_open_api_endpoint(request: Request):
-#     origin = request.headers.get("origin")
-    
-#     if origin and origin not in frontend_urls:
-#         return JSONResponse(status_code=403, content={"detail": "Forbidden"})
-
-#     return JSONResponse(app.openapi())
 
 @app.get("/wiki/search/summary/{summary_page_name}")
 async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundTasks):
