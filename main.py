@@ -23,32 +23,31 @@ def load_environment():
     mode = os.getenv("MODE", "").lower()
 
     if mode in ["development", "dev"]:
-        dotenv_path = ".env.development"
+        mode = "DEVELOPMENT"
     elif mode in ["production", "prod"]:
-        dotenv_path = ".env.production"
+        mode = "PRODUCTION"
     else:
-        dotenv_path = ".env" # This is for lambda function where .env is used
-    print("Loading environment variables from:", dotenv_path)
-    if os.path.exists(dotenv_path):
-        load_dotenv(dotenv_path)
-        return {"status": "ok"}
+        return {"status": "error"}
 
-    return {"status": "error"}
+    return {"status": "ok", "mode": mode}
+
+    
 
 
 
 loadenv_response = load_environment()
-if loadenv_response.get("status") == "error":
+mode = loadenv_response.get("mode")
+if mode == "error":
     print("Error loading environment variables. Please check the .env file.")
     exit(1)
 
-if os.getenv("MODE") == "production":
+if mode == "PRODUCTION":
     app = FastAPI(
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
     )
-elif os.getenv("MODE") == "development":
+elif mode == "DEVELOPMENT":
     app = FastAPI()
 
 else:
@@ -57,7 +56,7 @@ else:
 
 loc = Nominatim(user_agent="GetLoc")
 
-frontend_urls = os.getenv("ALLOWED_ORIGINS", "").split(", ")
+frontend_urls = os.getenv("ALLOWED_ORIGINS"+"_"+mode, "").split(", ")
 
 class Geodistance(BaseModel):
     lat1: float = Field(..., ge=-90, le=90)
@@ -72,9 +71,6 @@ class NearbyWikiPage(BaseModel):
     radius: int = Field(default=1000, ge=10, le=100_000,description="Distance in meters from the reference point")
     limit: int = Field(10, ge=1, description="Number of pages to return")
 
-# frontend_urls = origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "").split(", ") if origin.strip()
-frontend_urls = os.getenv("ALLOWED_ORIGINS", "").split(", ")
-
 app.add_middleware(
 
     CORSMiddleware,
@@ -84,7 +80,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BACKEND_WIKI_CACHE_TTL = int(os.getenv("BACKEND_WIKI_CACHE_TTL", 300))
+BACKEND_WIKI_CACHE_TTL = int(os.getenv("BACKEND_WIKI_CACHE_TTL"+"_"+mode, 300))
 summary_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)  # ttl time in seconds, then cache expires
 full_page_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)
 
