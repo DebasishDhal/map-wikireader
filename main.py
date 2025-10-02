@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.openapi.docs import get_swagger_ui_html
 from pydantic import BaseModel, Field
+from typing import Optional
 import requests, httpx, asyncio
 from geopy.geocoders import Nominatim
 import geopy.distance
@@ -10,7 +11,7 @@ from cachetools import TTLCache
 import os
 from dotenv import load_dotenv
 from random import sample
-from backend.utils import generate_circle_centers, fetch_url
+from backend.utils import generate_circle_centers, fetch_url, if_page_belongs_to_theme
 from mangum import Mangum
 
 def load_environment():
@@ -70,6 +71,7 @@ class NearbyWikiPage(BaseModel):
     lon: float = Field(default=37.561109, ge=-180, le=180)
     radius: int = Field(default=1000, ge=10, le=100_000,description="Distance in meters from the reference point")
     limit: int = Field(10, ge=1, description="Number of pages to return")
+    theme: Optional[str] = Field(default = None, description="Theme of the pages to return")
 
 app.add_middleware(
 
@@ -230,6 +232,7 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
     - lon: Longitude of the reference point
     - radius: Radius in meters within which to search for pages
     - limit: Maximum number of pages to return
+    - theme: Theme of the pages to return
 
     Output:
         {
@@ -251,8 +254,14 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
     lat_center, lon_center = payload.lat, payload.lon
     radius = payload.radius
     limit = payload.limit
+    theme = payload.theme
+    print("Theme:", theme)
 
     wiki_geosearch_radius_limit_meters = 10000 # Wikipedia API limit for geosearch radius in meters
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36'
+    }
 
     if radius <= wiki_geosearch_radius_limit_meters:
         url = ("https://en.wikipedia.org/w/api.php"+"?action=query"
@@ -264,7 +273,7 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
 
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, timeout=10)
+                response = await client.get(url, headers=headers, timeout=10)
             if response.status_code != 200:
                 return JSONResponse(
                     content={"error": "Failed to fetch nearby pages"},
@@ -273,10 +282,18 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
             data = response.json()
 
             pages = data.get("query", {}).get("geosearch", [])
+            print("Length of pages after geosearch:", len(pages))
+            # print("Pages:", pages)
+            if theme:
+                print("Theme:", theme)
+                pages_theme_validation = await asyncio.gather(*[if_page_belongs_to_theme(page.get("pageid"), theme) for page in pages])
+                pages = [pages[index] for index, page in enumerate(pages_theme_validation) if page]
+                # print("Length of pages after theme check:", len(pages))
 
             if len(pages) > limit:
                 pages = sample(pages, limit)
 
+            # print("Pages:", pages)
             return JSONResponse(
                 content={
                     "pages": pages,
@@ -320,14 +337,31 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
 
                     unit_with_dist = {**unit, "dist": dist}
                     all_pages.append(unit_with_dist)
+            
+            final_results = all_pages
+            # print("Final Results:", final_results)
+            if payload.theme:
+                print("Payload Theme:", payload.theme)
+                theme_based_results = []
 
-            if len(all_pages) > limit:
-                all_pages = sample(all_pages, limit)
+                #Do an async method to check if the page belongs to the theme in parallel
+                tasks = [if_page_belongs_to_theme(unit.get("pageid"), payload.theme) for unit in all_pages]
+                results = await asyncio.gather(*tasks)
+                for result in results:
+                    if result:
+                        theme_based_results.append(result)
+                
+                final_results = theme_based_results
 
+            if len(final_results) > limit:
+                final_results = sample(final_results, limit)
+
+
+            # print("All Pages:", final_results)
             return JSONResponse(
                 content={
-                    "pages": all_pages,
-                    "count": len(all_pages)
+                    "pages": final_results,
+                    "count": len(final_results)
                 }
             )
         

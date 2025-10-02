@@ -1,5 +1,5 @@
 import math
-import httpx
+import httpx, asyncio
 
 def generate_circle_centers(center_lat, center_lon, radius_km, small_radius_km=10):
     """
@@ -67,3 +67,26 @@ async def fetch_url(client: httpx.AsyncClient, url: str):
         }
     except Exception as e:
         return {"url": url, "error": str(e)}
+    
+
+async def if_page_belongs_to_theme(page_id: str, theme: str):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36'
+    }
+
+    link = f"https://en.wikipedia.org/w/api.php?action=query&pageids={page_id}&prop=extracts&exintro&explaintext&format=json"
+    async with httpx.AsyncClient() as client:
+        response = await client.get(link, headers=headers, timeout=5)
+        data = response.json()
+        page = data.get("query", {}).get("pages", {}).get(str(page_id), {})
+        extract = page.get("extract", "")
+        # print("Extract:", extract, "Response status:", response.status_code)
+
+        if not extract or (theme and theme.lower() not in extract.lower()):
+            return False
+        else:
+            return {"page_id": page_id, "data": extract}
+
+
+
+
