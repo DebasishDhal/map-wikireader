@@ -55,7 +55,7 @@ else:
     print("Invalid mode. Please check the .env file.")
     exit(1)
 
-loc = Nominatim(user_agent="wiki-nearby-api/1.0 (contact: your-email@example.com)")
+loc = Nominatim(user_agent="GetLoc")
 
 frontend_urls = os.getenv("ALLOWED_ORIGINS"+"_"+mode, "").split(", ")
 
