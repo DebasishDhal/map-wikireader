@@ -55,7 +55,7 @@ else:
     print("Invalid mode. Please check the .env file.")
     exit(1)
 
-loc = Nominatim(user_agent="GetLoc")
+loc = Nominatim(user_agent="wiki-nearby-api/1.0 (contact: your-email@example.com)")
 
 frontend_urls = os.getenv("ALLOWED_ORIGINS"+"_"+mode, "").split(", ")
 
@@ -103,7 +103,7 @@ async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundT
         return JSONResponse(content=summary_cache[summary_page_name], status_code=200)
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{summary_page_name}", timeout=10)
+            response = await client.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{summary_page_name}", timeout=10, headers=HEADERS)
 
         if response.status_code != 200:
             return JSONResponse(
@@ -148,7 +148,7 @@ async def search_wiki_full_page(full_page: str, background_tasks: BackgroundTask
         return JSONResponse(content=full_page_cache[full_page], status_code=200)
     
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"https://en.wikipedia.org/wiki/{full_page}", timeout=10)
+        response = await client.get(f"https://en.wikipedia.org/wiki/{full_page}", timeout=10, headers=HEADERS)
     try:
         if response.status_code != 200:
             return JSONResponse(
@@ -223,160 +223,100 @@ def get_geodistance(payload: Geodistance):
 
 
     
+HEADERS = {
+    'User-Agent': 'map-wikireader/1.0 (contact: your-email@example.com) python-http-client'
+}
+
 @app.post("/wiki/nearby")
 async def get_nearby_wiki_pages(payload: NearbyWikiPage):
     """
     Returns a list of wikipedia pages whose geographical coordinates are within a specified radius from a given location.
-    Input:
-    - lat: Latitude of the reference point
-    - lon: Longitude of the reference point
-    - radius: Radius in meters within which to search for pages
-    - limit: Maximum number of pages to return
-    - theme: Theme of the pages to return
-
-    Output:
-        {
-            "pages": [
-                {
-                    "pageid": 123456,
-                    "title": "Page Title",
-                    "lat": 54.163337,
-                    "lon": 37.561109,
-                    "dist": 123.45  # Dist. in meters from the reference point
-                    ...
-                },
-                ...
-            ],
-            "count": 10 #Total no. of such pages
-        }
-    Example raw respone from Wikipedia API: https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=40.7128%7C-74.0060&gsradius=10000&gslimit=1&format=json
     """
     lat_center, lon_center = payload.lat, payload.lon
     radius = payload.radius
     limit = payload.limit
     theme = payload.theme
-    print("Theme:", theme)
-
-    wiki_geosearch_radius_limit_meters = 10000 # Wikipedia API limit for geosearch radius in meters
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36'
-    }
+    wiki_geosearch_radius_limit_meters = 10_000  # Wikipedia API limit
 
     if radius <= wiki_geosearch_radius_limit_meters:
-        url = ("https://en.wikipedia.org/w/api.php"+"?action=query"
-                "&list=geosearch"
-                f"&gscoord={lat_center}|{lon_center}"
-                f"&gsradius={radius}"
-                f"&gslimit={limit}"
-                "&format=json")
-
+        url = (
+            "https://en.wikipedia.org/w/api.php?action=query"
+            "&list=geosearch"
+            f"&gscoord={lat_center}|{lon_center}"
+            f"&gsradius={radius}"
+            f"&gslimit={limit}"
+            "&format=json"
+        )
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers, timeout=10)
+                response = await client.get(url, headers=HEADERS, timeout=10)
             if response.status_code != 200:
-                return JSONResponse(
-                    content={"error": "Failed to fetch nearby pages"},
-                    status_code=500
-                )
+                return JSONResponse(content={"error": "Failed to fetch nearby pages"}, status_code=500)
             data = response.json()
-
             pages = data.get("query", {}).get("geosearch", [])
-            print("Length of pages after geosearch:", len(pages))
-            # print("Pages:", pages)
             if theme:
-                print("Theme:", theme)
-                pages_theme_validation = await asyncio.gather(*[if_page_belongs_to_theme(page.get("pageid"), theme) for page in pages])
-                pages = [pages[index] for index, page in enumerate(pages_theme_validation) if page]
-                # print("Length of pages after theme check:", len(pages))
-
+                pages_theme_validation = await asyncio.gather(
+                    *[if_page_belongs_to_theme(page.get("pageid"), theme) for page in pages]
+                )
+                # pages_theme_validation returns False or dict as per backend/utils.py
+                theme_pages = [pages[i] for i, r in enumerate(pages_theme_validation) if r]
+                pages = theme_pages
             if len(pages) > limit:
+                from random import sample
                 pages = sample(pages, limit)
-
-            # print("Pages:", pages)
-            return JSONResponse(
-                content={
-                    "pages": pages,
-                    "count": len(pages)
-                },
-                status_code=200
-            )
+            return JSONResponse(content={"pages": pages, "count": len(pages)}, status_code=200)
         except Exception as e:
-            return JSONResponse(
-                content={"error": str(e)},
-                status_code=500
-            )
-        
-    elif radius > wiki_geosearch_radius_limit_meters:
+            return JSONResponse(content={"error": str(e)}, status_code=500)
+    else:
+        # radius > wiki_geosearch_radius_limit_meters
         all_pages = []
-
+        from backend.utils import generate_circle_centers, fetch_url, if_page_belongs_to_theme
         small_circle_centers = generate_circle_centers(lat_center, lon_center, radius / 1000, small_radius_km=10)
-        base_url = "https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord={lat}|{lon}&gsradius={small_radius_km}&gslimit={page_limit}&format=json"
-        urls = [base_url.format(lat=center[0], lon=center[1], small_radius_km=wiki_geosearch_radius_limit_meters, page_limit=100) for center in small_circle_centers]
-
-        print("URL Counts:", len(urls))
+        base_url = "https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord={lat}|{lon}&gsradius=10000&gslimit=100&format=json"
+        urls = [base_url.format(lat=center[0], lon=center[1]) for center in small_circle_centers]
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(headers=HEADERS) as client:
                 tasks = [fetch_url(client, url) for url in urls]
                 results = await asyncio.gather(*tasks)
-            
+            seen_ids = set()
             for result in results:
-
                 for unit in result.get("data", {}).get("query", {}).get("geosearch", []):
-
-                    lat, lon = unit.get("lat"), unit.get("lon")
-                    if lat is not None and lon is not None:
-                        dist = int(geopy.distance.distance(
-                                (lat_center, lon_center), (lat, lon)
-                            ).m)
-                    else: 
-                        dist = None
-
-                    if (not dist) or (dist and dist > radius):
-                        continue
-
-                    unit_with_dist = {**unit, "dist": dist}
-                    all_pages.append(unit_with_dist)
-            
+                    pageid = unit.get("pageid")
+                    if pageid not in seen_ids:
+                        seen_ids.add(pageid)
+                        lat, lon = unit.get("lat"), unit.get("lon")
+                        if lat is not None and lon is not None:
+                            dist = int(
+                                __import__('geopy.distance').distance.distance(
+                                    (lat_center, lon_center),
+                                    (lat, lon)
+                                ).m
+                            )
+                        else:
+                            dist = None
+                        if (not dist) or (dist > radius):
+                            continue
+                        unit_with_dist = {**unit, "dist": dist}
+                        all_pages.append(unit_with_dist)
             final_results = all_pages
-            # print("Final Results:", final_results)
-            if payload.theme:
-                print("Payload Theme:", payload.theme)
+            if theme:
+                from backend.utils import if_page_belongs_to_theme
                 theme_based_results = []
-
-                #Do an async method to check if the page belongs to the theme in parallel
-                tasks = [if_page_belongs_to_theme(unit.get("pageid"), payload.theme) for unit in all_pages]
-                results = await asyncio.gather(*tasks)
-                for result in results:
-                    if result:
-                        theme_based_results.append(result)
-                
+                tasks = [if_page_belongs_to_theme(unit.get("pageid"), theme) for unit in all_pages]
+                theme_results = await asyncio.gather(*tasks)
+                theme_based_results = [all_pages[i] for i, r in enumerate(theme_results) if r]
                 final_results = theme_based_results
-
             if len(final_results) > limit:
+                from random import sample
                 final_results = sample(final_results, limit)
-
-
-            # print("All Pages:", final_results)
-            return JSONResponse(
-                content={
-                    "pages": final_results,
-                    "count": len(final_results)
-                }
-            )
-        
+            return JSONResponse(content={"pages": final_results, "count": len(final_results)}, status_code=200)
         except Exception as e:
-            return JSONResponse(
-                content={"error": str(e)},
-                status_code=500
-        )    
-
-
+            return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.get("/random")
 def random():
     url = "https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=54.163337|37.561109&gsradius=10000&gslimit=10&format=json"
-    response = requests.get(url, timeout=10)
+    response = requests.get(url, timeout=10, headers=HEADERS)
 
     if response.status_code != 200:
         return JSONResponse(
