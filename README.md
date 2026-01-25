@@ -69,3 +69,8 @@ pinned: false
 - Block all public access (Turn off 'Turn off all public access`)
 - In properties, get a url to the bucket, put it inside the allowed origins of backend (Lambda)
 - That's it.
+
+### AWS Cloudfront
+- Used it to make the frontend more human-friendly. It still looks atrocious and I won't click on it (https://dx2uv1bz4zali.cloudfront.net/).
+- Currently, I don't have a custom domain. But it was a good exercise with cloudfront. 
+- Create a distribution on cloudfront. Use the S3 bucket with index.json as default path. The distribution will be ready in 5 minutes. Now the end user uses the cloudfront and not the S3 bucket directly. Make changes accordingly in your backend.
