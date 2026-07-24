@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from random import sample
 from backend.utils import generate_circle_centers, fetch_url, if_page_belongs_to_theme
 from mangum import Mangum
-
+from backend.logger.logger_setup import normal_logger as logger
 def load_environment():
     """
     Load environment variables from a .env file based on the mode (development or production).
@@ -39,7 +39,7 @@ def load_environment():
 loadenv_response = load_environment()
 mode = loadenv_response.get("mode")
 if mode == "error":
-    print("Error loading environment variables. Please check the .env file.")
+    logger.error("Error loading environment variables. Please check the .env file.")
     exit(1)
 
 if mode == "PRODUCTION":
@@ -52,7 +52,7 @@ elif mode == "DEVELOPMENT":
     app = FastAPI()
 
 else:
-    print("Invalid mode. Please check the .env file.")
+    logger.error("Invalid mode. Please check the .env file.")
     exit(1)
 
 loc = Nominatim(user_agent="GetLoc")
@@ -86,6 +86,8 @@ BACKEND_WIKI_CACHE_TTL = int(os.getenv("BACKEND_WIKI_CACHE_TTL"+"_"+mode, 300))
 summary_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)  # ttl time in seconds, then cache expires
 full_page_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)
 
+logger.debug("running", verbosity=1)
+logger.debug(f"Backend Wiki Cache TTL: {BACKEND_WIKI_CACHE_TTL}", verbosity=1)
 @app.get("/")
 def health_check():
     return {"status": "ok"}
@@ -144,7 +146,7 @@ async def search_wiki_full_page(full_page: str, background_tasks: BackgroundTask
         Output: {"title": "Page Title", "content": "Full content here", "latitude": float, "longitude": float}
     """
     if full_page in full_page_cache:
-        # print("Cache hit for full_page:", full_page) #Working
+        logger.debug(f"Cache hit for full_page: {full_page}") #Working
         return JSONResponse(content=full_page_cache[full_page], status_code=200)
     
     async with httpx.AsyncClient() as client:
