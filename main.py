@@ -14,6 +14,7 @@ from random import sample
 from backend.utils import generate_circle_centers, fetch_url, if_page_belongs_to_theme
 from mangum import Mangum
 from backend.logger.logger_setup import normal_logger as logger
+from backend.persistence import db, current_user, record_activity
 def load_environment():
     """
     Load environment variables from a .env file based on the mode (development or production).
@@ -29,6 +30,9 @@ def load_environment():
         mode = "PRODUCTION"
     else:
         return {"status": "error"}
+
+    # Keep secrets and per-environment settings in the corresponding local file.
+    load_dotenv(f".env.{mode.lower()}")
 
     return {"status": "ok", "mode": mode}
 
@@ -72,6 +76,36 @@ class NearbyWikiPage(BaseModel):
     radius: int = Field(default=1000, ge=10, le=100_000,description="Distance in meters from the reference point")
     limit: int = Field(10, ge=1, description="Number of pages to return")
     theme: Optional[str] = Field(default = None, description="Theme of the pages to return")
+
+class SearchRecord(BaseModel):
+    query: str
+    search_type: str = "wikipedia"
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    radius_m: Optional[int] = None
+    theme: Optional[str] = None
+    result_count: Optional[int] = None
+
+class LocationRecord(BaseModel):
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    title: str
+    description: Optional[str] = None
+    wikipedia_page_id: int
+    visibility: str = "private"
+
+class ListRecord(BaseModel):
+    name: str
+    description: str = ""
+    visibility: str = "private"
+
+class ListItemRecord(BaseModel):
+    location_id: str
+    note: Optional[str] = None
+    position: Optional[int] = None
+
+class ReorderRecord(BaseModel):
+    location_ids: list[str]
 
 app.add_middleware(
 
@@ -121,7 +155,8 @@ async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundT
                 "title": summary_page_name,
                 "content": f"{response.json().get('extract', 'No content available')}",
                 "latitude": coords.latitude if coords else None,
-                "longitude": coords.longitude if coords else None
+                "longitude": coords.longitude if coords else None,
+                "wikipedia_page_id": response.json().get("pageid")
             }
         
         # background_tasks.add_task(lambda: summary_cache.__setitem__(summary_page_name, result))
@@ -342,5 +377,143 @@ def random():
         status_code=200
     )
 
+
+@app.get("/api/me")
+def get_profile(user=Depends(current_user), conn=Depends(db)):
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM lists WHERE user_id=%s ORDER BY is_default DESC,updated_at DESC", (user["id"],))
+        lists = cur.fetchall()
+        cur.execute("SELECT * FROM searches WHERE user_id=%s ORDER BY created_at DESC LIMIT 50", (user["id"],))
+        searches = cur.fetchall()
+        cur.execute("SELECT * FROM user_activities WHERE user_id=%s ORDER BY created_at DESC LIMIT 100", (user["id"],))
+        activities = cur.fetchall()
+        cur.execute("SELECT * FROM locations WHERE user_id=%s ORDER BY created_at DESC", (user["id"],))
+        locations = cur.fetchall()
+    return {"user": user, "lists": lists, "searches": searches, "activities": activities, "locations": locations}
+
+@app.post("/api/searches")
+def save_search(record: SearchRecord, user=Depends(current_user), conn=Depends(db)):
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO searches (user_id,query,search_type,latitude,longitude,radius_m,theme,result_count) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+                    (user["id"], record.query, record.search_type, record.latitude, record.longitude, record.radius_m, record.theme, record.result_count))
+        row = cur.fetchone()
+        record_activity(conn, user["id"], "search", {"query": record.query, "search_type": record.search_type})
+    conn.commit()
+    return row
+
+@app.get("/api/searches")
+def list_searches(user=Depends(current_user), conn=Depends(db)):
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM searches WHERE user_id=%s ORDER BY created_at DESC LIMIT 100", (user["id"],))
+        return cur.fetchall()
+
+@app.patch("/api/searches/latest")
+def update_search_result_count(query: str, result_count: int, user=Depends(current_user), conn=Depends(db)):
+    with conn.cursor() as cur:
+        cur.execute("UPDATE searches SET result_count=%s WHERE id=(SELECT id FROM searches WHERE user_id=%s AND query=%s ORDER BY created_at DESC LIMIT 1) RETURNING *",
+                    (result_count, user["id"], query))
+        row = cur.fetchone()
+    conn.commit()
+    return row or {"status": "not_found"}
+
+@app.post("/api/locations")
+def save_location(record: LocationRecord, user=Depends(current_user), conn=Depends(db)):
+    if record.visibility not in ("public", "private"):
+        raise HTTPException(422, "Visibility must be public or private")
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO locations (user_id,latitude,longitude,title,description,visibility,wikipedia_page_id) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+                    (user["id"], record.latitude, record.longitude, record.title, record.description, record.visibility, record.wikipedia_page_id))
+        location = cur.fetchone()
+        record_activity(conn, user["id"], "location_saved", {"location_id": str(location["id"]), "title": record.title})
+    conn.commit()
+    return location
+
+@app.get("/api/locations")
+def list_locations(user=Depends(current_user), conn=Depends(db)):
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM locations WHERE user_id=%s ORDER BY created_at DESC", (user["id"],))
+        return cur.fetchall()
+
+@app.post("/api/lists")
+def create_list(record: ListRecord, user=Depends(current_user), conn=Depends(db)):
+    if record.visibility not in ("public", "private"):
+        raise HTTPException(422, "Visibility must be public or private")
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO lists (user_id,name,description,visibility) VALUES (%s,%s,%s,%s) RETURNING *", (user["id"], record.name, record.description, record.visibility))
+        result = cur.fetchone()
+        record_activity(conn, user["id"], "collection_created", {"list_id": str(result["id"]), "name": record.name})
+    conn.commit()
+    return result
+
+@app.patch("/api/lists/{list_id}")
+def update_list(list_id: str, record: ListRecord, user=Depends(current_user), conn=Depends(db)):
+    if record.visibility not in ("public", "private"):
+        raise HTTPException(422, "Visibility must be public or private")
+    with conn.cursor() as cur:
+        cur.execute("UPDATE lists SET name=%s,description=%s,visibility=%s,updated_at=now() WHERE id=%s AND user_id=%s RETURNING *",
+                    (record.name, record.description, record.visibility, list_id, user["id"]))
+        result = cur.fetchone()
+        if not result:
+            raise HTTPException(404, "List not found")
+        record_activity(conn, user["id"], "collection_updated", {"list_id": list_id, "visibility": record.visibility})
+    conn.commit()
+    return result
+
+@app.get("/api/lists/{list_id}")
+def get_list(list_id: str, user=Depends(current_user), conn=Depends(db)):
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM lists WHERE id=%s AND (user_id=%s OR visibility='public')", (list_id, user["id"]))
+        result = cur.fetchone()
+        if not result:
+            raise HTTPException(404, "List not found")
+        cur.execute("SELECT locations.*,list_locations.position,list_locations.note AS list_note FROM list_locations JOIN locations ON locations.id=list_locations.location_id WHERE list_locations.list_id=%s AND (locations.user_id=%s OR locations.visibility='public') ORDER BY list_locations.position NULLS LAST,list_locations.added_at", (list_id, user["id"]))
+        result["locations"] = cur.fetchall()
+        return result
+
+@app.post("/api/lists/{list_id}/locations")
+def add_list_item(list_id: str, item: ListItemRecord, user=Depends(current_user), conn=Depends(db)):
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM lists WHERE id=%s AND user_id=%s", (list_id, user["id"]))
+        if not cur.fetchone():
+            raise HTTPException(404, "List not found")
+        cur.execute("SELECT id FROM locations WHERE id=%s AND user_id=%s", (item.location_id, user["id"]))
+        if not cur.fetchone():
+            raise HTTPException(404, "Location not found")
+        cur.execute("INSERT INTO list_locations (list_id,location_id,position,note) VALUES (%s,%s,%s,%s) ON CONFLICT (list_id,location_id) DO UPDATE SET note=EXCLUDED.note,position=COALESCE(EXCLUDED.position,list_locations.position)", (list_id, item.location_id, item.position, item.note))
+        record_activity(conn, user["id"], "location_added_to_list", {"list_id": list_id, "location_id": item.location_id})
+    conn.commit()
+    return {"status": "ok"}
+
+@app.delete("/api/lists/{list_id}/locations/{location_id}")
+def remove_list_item(list_id: str, location_id: str, user=Depends(current_user), conn=Depends(db)):
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM list_locations USING lists WHERE list_locations.list_id=lists.id AND lists.user_id=%s AND list_locations.list_id=%s AND list_locations.location_id=%s",
+                    (user["id"], list_id, location_id))
+        record_activity(conn, user["id"], "location_removed_from_list", {"list_id": list_id, "location_id": location_id})
+    conn.commit()
+    return {"status": "ok"}
+
+@app.put("/api/lists/{list_id}/locations/order")
+def reorder_list(list_id: str, order: ReorderRecord, user=Depends(current_user), conn=Depends(db)):
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM lists WHERE id=%s AND user_id=%s", (list_id, user["id"]))
+        if not cur.fetchone():
+            raise HTTPException(404, "List not found")
+        for position, location_id in enumerate(order.location_ids):
+            cur.execute("UPDATE list_locations SET position=%s WHERE list_id=%s AND location_id=%s", (position, list_id, location_id))
+        record_activity(conn, user["id"], "collection_reordered", {"list_id": list_id})
+    conn.commit()
+    return {"status": "ok"}
+
+@app.get("/api/public/lists/{list_id}")
+def public_list(list_id: str, conn=Depends(db)):
+    with conn.cursor() as cur:
+        cur.execute("SELECT id,name,description FROM lists WHERE id=%s AND visibility='public'", (list_id,))
+        result = cur.fetchone()
+        if not result:
+            raise HTTPException(404, "Public list not found")
+        cur.execute("SELECT locations.*,list_locations.position,list_locations.note AS list_note FROM list_locations JOIN locations ON locations.id=list_locations.location_id WHERE list_locations.list_id=%s AND locations.visibility='public' ORDER BY list_locations.position NULLS LAST", (list_id,))
+        result["locations"] = cur.fetchall()
+        return result
 
 lambda_handler = Mangum(app)

@@ -47,11 +47,24 @@ const ResizeHandler = ({ trigger }) => {
     }, [trigger, map]);
     return null;
 };
-const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmittedQuery } ) => {
+const SharedListBounds = ({ locations }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (!locations?.length) return;
+        const points = locations.filter((place) => Number.isFinite(place.latitude) && Number.isFinite(place.longitude))
+            .map((place) => [place.latitude, place.longitude]);
+        if (!points.length) return;
+        if (points.length === 1) map.setView(points[0], Math.max(map.getZoom(), 12));
+        else map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 14 });
+    }, [locations, map]);
+    return null;
+};
+const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmittedQuery, onSaveLocation, onSearchResults, isSignedIn, sharedLocations = [] } ) => {
     const [baseLayer, setBaseLayer] = useState("base"); // "base" | "satellite"
 
     const [markerPosition, setMarkerPosition] = useState(null);
     const [wikiContent, setWikiContent] = useState(null);
+    const [locationNote, setLocationNote] = useState('');
     const [panelSize, setPanelSize] = useState('half');
     const [wikiWidth, setWikiWidth] = useState(20);
     const [iframeSrc, setIframeSrc] = useState(''); 
@@ -178,6 +191,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
 
             const res = await fetch(endpoint);
             const data = await res.json();
+            onSearchResults?.(pageName, res.ok && data?.title ? 1 : 0);
 
             if (contentType === 'summary') {
                 setWikiContent(data);
@@ -221,7 +235,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
             } catch (error) {
               console.error("Error fetching Wikipedia content:", error);
             }
-          }, [contentType]);
+          }, [contentType, onSearchResults]);
 
     useEffect(() => {
         if (searchQuery) {
@@ -445,7 +459,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
 
 
     return (
-        <div ref={containerRef} style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden' }}>
+        <div ref={containerRef} style={{ display: 'flex', height: 'calc(100vh - 64px)', width: '100%', overflow: 'hidden' }}>
             {panelSize !== 'closed' && (
                 <>
                     <div style={{
@@ -460,6 +474,15 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                     }}>
                         <div style={{ marginBottom: '20px' }}>
                             <h2 style={{ margin: 2}}>{wikiContent?.title || 'Search for a location'}</h2>
+                            {wikiContent?.latitude != null && wikiContent?.longitude != null && (
+                                <div style={{ display: 'flex', gap: 6, margin: '10px 0' }}><input aria-label="Location note" placeholder="Add a personal note" value={locationNote} onChange={(e) => setLocationNote(e.target.value)} />
+                                <button onClick={() => onSaveLocation?.({ title: wikiContent.title, latitude: wikiContent.latitude,
+                                    longitude: wikiContent.longitude, description: locationNote || wikiContent.content,
+                                    wikipedia_page_id: wikiContent.wikipedia_page_id })} disabled={!isSignedIn}
+                                    title={isSignedIn ? 'Save this place' : 'Sign in to save places'}>
+                                    Save place
+                                </button></div>
+                            )}
                             {markerPosition && (
                                 <button
                                     onClick={() => {
@@ -664,6 +687,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     />
                     )}
+                    <SharedListBounds locations={sharedLocations} />
                     
                     {/* Tropics and Equator Lines */}
                     <>
@@ -740,6 +764,11 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                             )}
                         </Marker>
                     )}
+                    {sharedLocations.map((place) => (
+                        <Marker key={place.id} position={[place.latitude, place.longitude]}>
+                            <Popup><strong>{place.title}</strong><br />{place.description}</Popup>
+                        </Marker>
+                    ))}
 
                     {/* Exploration Mode Markers */}
                     {explorationMode && explorationMarkers.map((marker, index) => (

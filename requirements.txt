@@ -12,4 +12,5 @@ gpxpy == 1.6.2
 requests == 2.30.0
 cachetools == 5.5.1
 mangum==0.17.0
+psycopg2-binary==2.9.10
 # langchain==0.3.10
