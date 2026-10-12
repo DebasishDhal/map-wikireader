@@ -11,7 +11,9 @@ pinned: false
 
 ## Sign-in and saved places
 
-Configure the Cognito User Pool app client as a public SPA client with the authorization code grant and `openid email profile` scopes. Add its hosted UI domain, client ID, and exact frontend callback/sign-out URLs to `frontend/.env.development` or `frontend/.env.production`. Set `COGNITO_ISSUER` (the pool issuer URL, `https://cognito-idp.<region>.amazonaws.com/<user-pool-id>`) and `COGNITO_CLIENT_ID` in the backend environment file (`.env.development` locally; Lambda environment variables in production). `.env.example` documents the required backend keys. The frontend uses PKCE and keeps the ID token in session storage; the API validates it against the pool signing keys.
+Configure the Cognito User Pool app client as a public SPA client with the authorization code grant and `openid email profile` scopes. Add its hosted UI domain, client ID, and exact frontend callback/sign-out URLs to the root `.env.development` and `.env.production` files. Set `COGNITO_ISSUER` (the pool issuer URL, `https://cognito-idp.<region>.amazonaws.com/<user-pool-id>`) and `COGNITO_CLIENT_ID` in the backend environment file (`.env.development` locally; Lambda environment variables in production). `.env.example` documents the required keys. The frontend uses PKCE and keeps the ID token in session storage; the API validates it against the pool signing keys.
+
+All local frontend and backend settings live in the root `.env`, `.env.development`, and `.env.production` files. The frontend start/build scripts read only `REACT_APP_*` keys from those files; production builds select `.env.production`. Docker Compose passes the browser settings from the root `.env` without mounting backend secrets into the frontend container.
 
 Search history writes generated search IDs and associates them with users through `searches.user_id`. Remove the incorrect foreign key from `searches.id` to `users.id` in Neon before using search history. Saved lists use `list_locations` as the many-to-many join table; `list_items` is not used.
 

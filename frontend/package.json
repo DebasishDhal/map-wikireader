@@ -7,6 +7,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
+    "dotenv": "^10.0.0",
     "geodesy": "^2.4.0",
     "geographiclib-geodesic": "^2.1.1",
     "leaflet": "^1.9.4",
@@ -18,9 +19,9 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "start": "node scripts/run-with-root-env.js start",
+    "build": "node scripts/run-with-root-env.js build",
+    "test": "node scripts/run-with-root-env.js test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
