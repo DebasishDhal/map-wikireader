@@ -5,7 +5,7 @@ pymongo == 4.10.0
 python-dotenv == 1.0.1
 python-dateutil == 2.9.0.post0
 passlib == 1.7.4
-pyjwt == 2.9.0
+pyjwt[crypto] == 2.9.0
 pytest == 8.3.4
 geopy == 2.4.1
 gpxpy == 1.6.2

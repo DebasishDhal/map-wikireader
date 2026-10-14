@@ -1,5 +1,6 @@
 """Neon persistence and Cognito bearer-token authentication."""
 import os
+import logging
 from functools import lru_cache
 from typing import Optional
 
@@ -10,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg2.extras import Json, RealDictCursor
 
 bearer = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 def db():
@@ -37,9 +39,13 @@ def current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(b
         key = jwks_client(issuer).get_signing_key_from_jwt(credentials.credentials).key
         claims = jwt.decode(credentials.credentials, key, algorithms=["RS256"], issuer=issuer,
                             options={"verify_aud": False})
-        if claims.get("token_use") != "id" or claims.get("aud") != client_id:
-            raise ValueError("Invalid Cognito token")
-    except Exception:
+        if claims.get("token_use") != "id":
+            raise ValueError("Cognito returned a token that is not an ID token")
+        if claims.get("aud") != client_id:
+            raise ValueError("ID token audience does not match COGNITO_CLIENT_ID")
+    except Exception as error:
+        # Log the validation reason for diagnosis, but never log the bearer token.
+        logger.warning("Cognito ID-token validation failed (%s): %s", type(error).__name__, error)
         raise HTTPException(401, "Your session is invalid or expired")
     with conn.cursor() as cur:
         cur.execute('''INSERT INTO users (cognitor_sub,email,display_name) VALUES (%s,%s,%s)
