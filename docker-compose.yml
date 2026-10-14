@@ -8,6 +8,8 @@ services:
     command: uvicorn main:app --host 0.0.0.0 --reload
     volumes:
       - .:/app
+    environment:
+      MODE: ${MODE:-development}
 
   frontend:
     build:
@@ -20,8 +22,8 @@ services:
       - /app/node_modules
     environment:
       REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL}
-      REACT_APP_COGNITO_DOMAIN: ${REACT_APP_COGNITO_DOMAIN}
-      REACT_APP_COGNITO_CLIENT_ID: ${REACT_APP_COGNITO_CLIENT_ID}
-      REACT_APP_COGNITO_REDIRECT_URI: ${REACT_APP_COGNITO_REDIRECT_URI}
+      REACT_APP_COGNITO_DOMAIN: ${COGNITO_DOMAIN}
+      REACT_APP_COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
+      REACT_APP_COGNITO_REDIRECT_URI: ${COGNITO_REDIRECT_URI}
     depends_on:
       - map-wikiread

@@ -39,6 +39,17 @@ function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const authError = params.get('error');
+    if (authError) {
+      const description = params.get('error_description');
+      params.delete('error');
+      params.delete('error_description');
+      params.delete('state');
+      const query = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+      setNotice(description || `Sign-in failed (${authError}). Please check your Cognito app client settings.`);
+      return;
+    }
     const code = params.get('code');
     if (!code) return;
     const expectedState = sessionStorage.getItem('map-wikireader-oauth-state');
@@ -50,11 +61,9 @@ function App() {
     if (!expectedState || state !== expectedState || !verifier || !cognito.domain || !cognito.clientId) {
       setNotice('Sign-in could not be verified. Please try again.'); return;
     }
-    const tokenUrl = `https://${cognito.domain.replace(/^https?:\/\//, '')}/oauth2/token`;
-    fetch(tokenUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ grant_type: 'authorization_code', client_id: cognito.clientId,
-        code, redirect_uri: cognito.redirect, code_verifier: verifier }) })
-      .then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.error_description || 'Sign-in failed'); return result; })
+    fetch(`${API}/api/auth/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, code_verifier: verifier }) })
+      .then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.detail || result.error_description || 'Sign-in failed'); return result; })
       .then((tokens) => {
         const next = { idToken: tokens.id_token, accessToken: tokens.access_token,
           expiresAt: Date.now() + Number(tokens.expires_in || 3600) * 1000 };
@@ -83,18 +92,25 @@ function App() {
       setNotice('Add the Cognito domain and app client ID to the frontend environment to enable sign in.');
       return;
     }
-    const random = (length) => { const bytes = new Uint8Array(length); window.crypto.getRandomValues(bytes); return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
-    const verifier = random(32);
-    const challengeBytes = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-    const challenge = btoa(String.fromCharCode(...new Uint8Array(challengeBytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    const state = random(24);
-    sessionStorage.setItem('map-wikireader-oauth-state', state);
-    sessionStorage.setItem('map-wikireader-pkce-verifier', verifier);
-    const url = new URL(`https://${cognito.domain.replace(/^https?:\/\//, '')}/oauth2/authorize`);
-    url.search = new URLSearchParams({ response_type: 'code', client_id: cognito.clientId,
-      redirect_uri: cognito.redirect, scope: 'openid email profile', state,
-      code_challenge_method: 'S256', code_challenge: challenge }).toString();
-    window.location.assign(url.toString());
+    try {
+      if (!window.crypto?.subtle) {
+        throw new Error('Sign in requires a secure page. Open the app on localhost or use its HTTPS address.');
+      }
+      const random = (length) => { const bytes = new Uint8Array(length); window.crypto.getRandomValues(bytes); return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+      const verifier = random(32);
+      const challengeBytes = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+      const challenge = btoa(String.fromCharCode(...new Uint8Array(challengeBytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const state = random(24);
+      sessionStorage.setItem('map-wikireader-oauth-state', state);
+      sessionStorage.setItem('map-wikireader-pkce-verifier', verifier);
+      const url = new URL(`https://${cognito.domain.replace(/^https?:\/\//, '')}/oauth2/authorize`);
+      url.search = new URLSearchParams({ response_type: 'code', client_id: cognito.clientId,
+        redirect_uri: cognito.redirect, scope: 'openid', state,
+        code_challenge_method: 'S256', code_challenge: challenge }).toString();
+      window.location.assign(url.toString());
+    } catch (error) {
+      setNotice(error.message || 'Could not start sign-in. Please reload the app and try again.');
+    }
   };
 
   const signOut = () => {
@@ -158,7 +174,7 @@ function App() {
       </form>
       {session ? <div className="account-actions"><span>{profile?.user?.display_name || profile?.user?.email || 'Signed in'}</span>
         <button onClick={() => setPanel(panel ? '' : 'saved')}>My places</button><button className="quiet-button" onClick={signOut}>Sign out</button></div>
-        : <button onClick={signIn}>Sign in</button>}
+        : <button type="button" onClick={signIn}>Sign in</button>}
     </header>
     {notice && <div className="notice" role="status">{notice}<button onClick={() => setNotice('')} aria-label="Dismiss">×</button></div>}
     {sharedListName && <div className="shared-banner">Viewing public collection: <strong>{sharedListName}</strong></div>}

@@ -25,6 +25,22 @@ for (const [key, value] of Object.entries(fileValues)) {
   }
 }
 
+// Keep Cognito's public configuration in one set of variables. Map it to CRA's
+// required REACT_APP_* names only at frontend startup/build time.
+const frontendAliases = {
+  REACT_APP_COGNITO_DOMAIN: 'COGNITO_DOMAIN',
+  REACT_APP_COGNITO_CLIENT_ID: 'COGNITO_CLIENT_ID',
+  REACT_APP_COGNITO_REDIRECT_URI: 'COGNITO_REDIRECT_URI',
+};
+for (const [frontendKey, sharedKey] of Object.entries(frontendAliases)) {
+  if (process.env[frontendKey] === undefined && process.env[sharedKey] !== undefined) {
+    process.env[frontendKey] = process.env[sharedKey];
+  }
+  if (process.env[frontendKey] === undefined && fileValues[sharedKey] !== undefined) {
+    process.env[frontendKey] = fileValues[sharedKey];
+  }
+}
+
 const reactScripts = require.resolve(`react-scripts/scripts/${command}`);
 const child = spawn(process.execPath, [reactScripts, ...process.argv.slice(3)], {
   stdio: 'inherit',

@@ -9,7 +9,7 @@ from geopy.geocoders import Nominatim
 import geopy.distance
 from cachetools import TTLCache
 import os
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 from random import sample
 from backend.utils import generate_circle_centers, fetch_url, if_page_belongs_to_theme
 from mangum import Mangum
@@ -17,10 +17,13 @@ from backend.logger.logger_setup import normal_logger as logger
 from backend.persistence import db, current_user, record_activity
 def load_environment():
     """
-    Load environment variables from a .env file based on the mode (development or production).
+    Load common settings, then the selected environment file. Existing process
+    variables (for example Lambda or Compose settings) take precedence.
     """
-    dotenv_path = ".env" 
-    load_dotenv(dotenv_path) 
+    externally_configured = set(os.environ)
+    for key, value in dotenv_values(".env").items():
+        if value is not None:
+            os.environ.setdefault(key, value)
 
     mode = os.getenv("MODE", "").lower()
 
@@ -31,8 +34,11 @@ def load_environment():
     else:
         return {"status": "error"}
 
-    # Keep secrets and per-environment settings in the corresponding local file.
-    load_dotenv(f".env.{mode.lower()}")
+    # Environment-specific settings override common defaults, but never values
+    # supplied directly by the runtime environment.
+    for key, value in dotenv_values(f".env.{mode.lower()}").items():
+        if value is not None and key not in externally_configured:
+            os.environ[key] = value
 
     return {"status": "ok", "mode": mode}
 
@@ -107,6 +113,10 @@ class ListItemRecord(BaseModel):
 class ReorderRecord(BaseModel):
     location_ids: list[str]
 
+class CognitoCodeExchange(BaseModel):
+    code: str
+    code_verifier: str
+
 app.add_middleware(
 
     CORSMiddleware,
@@ -125,6 +135,42 @@ logger.debug(f"Backend Wiki Cache TTL: {BACKEND_WIKI_CACHE_TTL}", verbosity=1)
 @app.get("/")
 def health_check():
     return {"status": "ok"}
+
+@app.post("/api/auth/token")
+def exchange_cognito_code(payload: CognitoCodeExchange):
+    """Exchange a Cognito authorization code without exposing the app secret to the browser."""
+    domain = os.getenv("COGNITO_DOMAIN")
+    client_id = os.getenv("COGNITO_CLIENT_ID")
+    client_secret = os.getenv("COGNITO_CLIENT_SECRET")
+    redirect_uri = os.getenv("COGNITO_REDIRECT_URI")
+    if not all((domain, client_id, client_secret, redirect_uri)):
+        raise HTTPException(503, "Cognito token exchange is not configured on the backend")
+
+    token_url = f"https://{domain.removeprefix('https://').removeprefix('http://').rstrip('/')}/oauth2/token"
+    try:
+        response = requests.post(token_url, data={
+            "grant_type": "authorization_code",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": payload.code,
+            "redirect_uri": redirect_uri,
+            "code_verifier": payload.code_verifier,
+        }, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=15)
+    except requests.RequestException:
+        logger.exception("Cognito token endpoint request failed")
+        raise HTTPException(502, "Could not contact the Cognito token endpoint")
+
+    try:
+        token_response = response.json()
+    except ValueError:
+        token_response = {}
+    if not response.ok:
+        logger.warning("Cognito token exchange rejected with status %s", response.status_code)
+        raise HTTPException(response.status_code if 400 <= response.status_code < 500 else 502,
+                            token_response.get("error_description") or token_response.get("error") or "Cognito sign-in failed")
+    if not token_response.get("id_token") or not token_response.get("access_token"):
+        raise HTTPException(502, "Cognito returned an incomplete token response")
+    return token_response
 
 @app.get("/wiki/search/summary/{summary_page_name}")
 async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundTasks):
