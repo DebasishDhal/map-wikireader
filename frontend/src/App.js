@@ -25,6 +25,7 @@ function App() {
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
   const [visibility, setVisibility] = useState('private');
+  const [collectionChoices, setCollectionChoices] = useState({});
   const [sharedLocations, setSharedLocations] = useState([]);
   const [sharedListName, setSharedListName] = useState('');
   const [selectedList, setSelectedList] = useState(null);
@@ -174,6 +175,24 @@ function App() {
     }
   };
 
+  const toggleLocationInList = async (place, listId) => {
+    if (!listId) return;
+    const list = profile?.lists?.find((item) => item.id === listId);
+    const isInList = (place.list_ids || []).includes(listId);
+    try {
+      if (isInList) {
+        await api(`/api/lists/${listId}/locations/${place.id}`, { method: 'DELETE' });
+        showToast(`Removed from ${list?.name || 'collection'}.`, 'success');
+      } else {
+        await api(`/api/lists/${listId}/locations`, { method: 'POST', body: JSON.stringify({ location_id: place.id }) });
+        showToast(`Added to ${list?.name || 'collection'}.`, 'success');
+      }
+      setProfile(await api('/api/me'));
+    } catch (error) {
+      showToast(error.message || 'Could not update the collection.', 'error');
+    }
+  };
+
   const updateSearchCount = useCallback(async (query, resultCount) => {
     if (!session) return;
     try { await api(`/api/searches/latest?${new URLSearchParams({ query, result_count: String(resultCount) })}`, { method: 'PATCH' }); }
@@ -211,14 +230,31 @@ function App() {
     {panel === 'saved' && <aside className="saved-panel">
       <button className="close-panel" onClick={() => setPanel('')}>Close</button><h2>Your places</h2>
       {!profile ? <p>Loading saved data…</p> : <>
-        <h3>Collections</h3>{profile.lists.map((list) => <div className="list-row" key={list.id}><strong>{list.name}{list.is_default ? ' · Favorites' : ''}</strong><span>{list.visibility}</span>
-          <button onClick={async () => { try { setSelectedList(await api(`/api/lists/${list.id}`)); } catch (e) { setNotice(e.message); } }}>View</button>
-          {!list.is_default && <select aria-label={`Visibility for ${list.name}`} value={list.visibility} onChange={async (e) => { try { await api(`/api/lists/${list.id}`, { method: 'PATCH', body: JSON.stringify({ name: list.name, description: list.description, visibility: e.target.value }) }); setProfile(await api('/api/me')); } catch (error) { setNotice(error.message); } }}><option value="private">Private</option><option value="public">Public</option></select>}
-          {list.visibility === 'public' && <button onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/?list=${list.id}`); setNotice('Public collection link copied.'); }}>Share</button>}</div>)}
+        <h3>Collections</h3>{profile.lists.map((list) => {
+          const listLocations = (profile.locations || []).filter((place) => (place.list_ids || []).includes(list.id));
+          return <section className="collection-card" key={list.id}>
+            <div className="list-row"><strong>{list.name}{list.is_default ? ' · Favorites' : ''}</strong><span>{list.visibility}</span>
+              <button onClick={async () => { try { setSelectedList(await api(`/api/lists/${list.id}`)); } catch (e) { setNotice(e.message); } }}>Reorder</button>
+              {!list.is_default && <select aria-label={`Visibility for ${list.name}`} value={list.visibility} onChange={async (e) => { try { await api(`/api/lists/${list.id}`, { method: 'PATCH', body: JSON.stringify({ name: list.name, description: list.description, visibility: e.target.value }) }); setProfile(await api('/api/me')); } catch (error) { setNotice(error.message); } }}><option value="private">Private</option><option value="public">Public</option></select>}
+              {list.visibility === 'public' && <button onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/?list=${list.id}`); setNotice('Public collection link copied.'); }}>Share</button>}
+            </div>
+            {listLocations.length ? listLocations.map((place) => <div className="collection-place" key={place.id}>{place.title}</div>) : <p className="collection-empty">No places in this collection yet.</p>}
+          </section>;
+        })}
         <form className="collection-form" onSubmit={createCollection}><h3>New collection</h3><input name="name" placeholder="Collection name" required/><input name="description" placeholder="Description"/><select name="visibility"><option value="private">Private</option><option value="public">Public</option></select><button>Create</button></form>
         <label className="visibility-choice">New saved locations <select value={visibility} onChange={(e) => setVisibility(e.target.value)}><option value="private">Private</option><option value="public">Public</option></select></label>
         {selectedList && <section className="selected-list"><h3>{selectedList.name} · {selectedList.locations.length} places</h3>{selectedList.locations.map((place, index) => <div className="list-row" key={place.id}><span>{index + 1}. {place.title}</span><button disabled={index === 0} onClick={async () => { const ids = selectedList.locations.map((p) => p.id); [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]; await api(`/api/lists/${selectedList.id}/locations/order`, { method: 'PUT', body: JSON.stringify({ location_ids: ids }) }); setSelectedList(await api(`/api/lists/${selectedList.id}`)); }}>↑</button><button disabled={index === selectedList.locations.length - 1} onClick={async () => { const ids = selectedList.locations.map((p) => p.id); [ids[index], ids[index + 1]] = [ids[index + 1], ids[index]]; await api(`/api/lists/${selectedList.id}/locations/order`, { method: 'PUT', body: JSON.stringify({ location_ids: ids }) }); setSelectedList(await api(`/api/lists/${selectedList.id}`)); }}>↓</button><button onClick={async () => { await api(`/api/lists/${selectedList.id}/locations/${place.id}`, { method: 'DELETE' }); setSelectedList(await api(`/api/lists/${selectedList.id}`)); setProfile(await api('/api/me')); }}>Remove</button></div>)}</section>}
-        <h3>Saved locations</h3>{(profile.locations || []).map((place) => <div className="list-row" key={place.id}><span><strong>{place.title}</strong><small>{place.visibility} · {place.description || 'No note'}</small></span><select aria-label={`Add ${place.title} to collection`} id={`list-${place.id}`} defaultValue=""><option value="" disabled>Add to…</option>{profile.lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select><button onClick={async () => { const target = document.getElementById(`list-${place.id}`).value; if (!target) return; try { await api(`/api/lists/${target}/locations`, { method: 'POST', body: JSON.stringify({ location_id: place.id }) }); setNotice('Added to collection.'); } catch (e) { setNotice(e.message); } }}>Add</button></div>)}
+        <h3>Saved locations</h3>{(profile.locations || []).map((place) => {
+          const chosenListId = collectionChoices[place.id] || '';
+          const alreadyInList = (place.list_ids || []).includes(chosenListId);
+          return <div className="list-row" key={place.id}>
+            <span><strong>{place.title}</strong><small>{place.visibility} · {place.description || 'No note'}</small></span>
+            <select aria-label={`Choose collection for ${place.title}`} value={chosenListId} onChange={(event) => setCollectionChoices((choices) => ({ ...choices, [place.id]: event.target.value }))}>
+              <option value="">Choose collection…</option>{profile.lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}
+            </select>
+            <button disabled={!chosenListId} onClick={() => toggleLocationInList(place, chosenListId)}>{alreadyInList ? 'Remove' : 'Add'}</button>
+          </div>;
+        })}
         <h3>Recent searches</h3>{(profile.searches || []).map((s) => <button className="history-row" key={s.id} onClick={() => { setSearchQuery(s.query); setSubmittedQuery(s.query); setPanel(''); }}>{s.query}<small>{new Date(s.created_at).toLocaleString()}</small></button>)}
         <h3>Activity</h3>{(profile.activities || []).slice(0, 12).map((a) => <p className="activity-row" key={a.id}>{a.activity_type.replaceAll('_', ' ')} <small>{new Date(a.created_at).toLocaleString()}</small></p>)}
       </>}

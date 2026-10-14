@@ -435,6 +435,13 @@ def get_profile(user=Depends(current_user), conn=Depends(db)):
         activities = cur.fetchall()
         cur.execute("SELECT * FROM locations WHERE user_id=%s ORDER BY created_at DESC", (user["id"],))
         locations = cur.fetchall()
+        cur.execute("SELECT list_locations.location_id,list_locations.list_id FROM list_locations JOIN lists ON lists.id=list_locations.list_id WHERE lists.user_id=%s", (user["id"],))
+        memberships = cur.fetchall()
+    memberships_by_location = {}
+    for membership in memberships:
+        memberships_by_location.setdefault(str(membership["location_id"]), []).append(str(membership["list_id"]))
+    for location in locations:
+        location["list_ids"] = memberships_by_location.get(str(location["id"]), [])
     return {"user": user, "lists": lists, "searches": searches, "activities": activities, "locations": locations}
 
 @app.post("/api/searches")

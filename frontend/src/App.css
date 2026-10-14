@@ -18,6 +18,7 @@
 .saved-panel h2 { margin: 0 0 14px; }.saved-panel h3 { font-size: 14px; margin: 22px 0 8px; color: #53645c; }
 .close-panel { float: right; border: 0; background: #f0f3f1; border-radius: 7px; padding: 6px 9px; cursor: pointer; }
 .list-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #edf0ee; font-size: 13px; }.list-row strong { flex: 1; }.list-row span { color: #66746c; }
+.collection-card { padding: 0 10px 8px; margin-bottom: 10px; border: 1px solid #e7ede9; border-radius: 10px; background: #fbfcfb; }.collection-card .list-row { border-bottom: 1px solid #e7ede9; }.collection-place { padding: 8px 10px; border-bottom: 1px solid #edf0ee; color: #34463e; font-size: 13px; }.collection-place:last-child { border-bottom: 0; }.collection-empty { margin: 9px 10px 3px; color: #748078; font-size: 12px; }
 .list-row button, .collection-form select, .visibility-choice select { border: 1px solid #d7e0da; background: white; border-radius: 7px; padding: 6px 8px; cursor: pointer; }
 .collection-form { display: grid; gap: 8px; }.collection-form h3 { margin-bottom: 0; }.collection-form input { padding: 9px; border: 1px solid #d7e0da; border-radius: 7px; font: inherit; }.collection-form button { min-height: 36px; }
 .visibility-choice { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; font-size: 13px; }
