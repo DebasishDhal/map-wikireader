@@ -1,6 +1,6 @@
 import './App.css';
 import WikiMap from './components/Map';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 const API = (process.env.REACT_APP_BACKEND_URL || 'http://localhost:8004').replace(/\/$/, '');
 const AUTH_KEY = 'map-wikireader-session';
@@ -22,10 +22,20 @@ function App() {
   const [profile, setProfile] = useState(null);
   const [panel, setPanel] = useState('');
   const [notice, setNotice] = useState('');
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
   const [visibility, setVisibility] = useState('private');
   const [sharedLocations, setSharedLocations] = useState([]);
   const [sharedListName, setSharedListName] = useState('');
   const [selectedList, setSelectedList] = useState(null);
+
+  const showToast = (message, type) => {
+    window.clearTimeout(toastTimer.current);
+    setToast({ message, type });
+    toastTimer.current = window.setTimeout(() => setToast(null), 4000);
+  };
+
+  useEffect(() => () => window.clearTimeout(toastTimer.current), []);
 
   const api = useCallback(async (path, options = {}) => {
     const response = await fetch(`${API}${path}`, {
@@ -137,14 +147,31 @@ function App() {
   };
 
   const saveLocation = async (place) => {
-    if (!session) { setNotice('Sign in to save locations.'); return; }
+    if (!session) { showToast('Sign in to save locations.', 'error'); return; }
+    let location;
     try {
-      const location = await api('/api/locations', { method: 'POST', body: JSON.stringify({ ...place, visibility }) });
-      const favorites = profile?.lists?.find((list) => list.is_default);
-      if (favorites) await api(`/api/lists/${favorites.id}/locations`, { method: 'POST', body: JSON.stringify({ location_id: location.id }) });
-      setNotice('Location saved to Favorites.');
-      setProfile(await api('/api/me'));
-    } catch (error) { setNotice(error.message); }
+      location = await api('/api/locations', { method: 'POST', body: JSON.stringify({ ...place, visibility }) });
+    } catch (error) {
+      showToast(`Could not save location: ${error.message}`, 'error');
+      return;
+    }
+
+    const targetList = profile?.lists?.find((list) => list.is_default);
+    let collectionError = null;
+    if (targetList) {
+      try {
+        await api(`/api/lists/${targetList.id}/locations`, { method: 'POST', body: JSON.stringify({ location_id: location.id }) });
+      } catch (error) {
+        collectionError = error;
+      }
+    }
+
+    try { setProfile(await api('/api/me')); } catch (error) { setNotice(error.message); }
+    if (collectionError) {
+      showToast(`Location saved, but could not add it to ${targetList.name}: ${collectionError.message}`, 'error');
+    } else {
+      showToast(targetList ? `Location saved to ${targetList.name}.` : 'Location saved.', 'success');
+    }
   };
 
   const updateSearchCount = useCallback(async (query, resultCount) => {
@@ -177,6 +204,9 @@ function App() {
         : <button type="button" onClick={signIn}>Sign in</button>}
     </header>
     {notice && <div className="notice" role="status">{notice}<button onClick={() => setNotice('')} aria-label="Dismiss">×</button></div>}
+    {toast && <div className={`toast toast-${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'} aria-live={toast.type === 'error' ? 'assertive' : 'polite'}>
+      <span>{toast.message}</span><button onClick={() => { window.clearTimeout(toastTimer.current); setToast(null); }} aria-label="Dismiss notification">×</button>
+    </div>}
     {sharedListName && <div className="shared-banner">Viewing public collection: <strong>{sharedListName}</strong></div>}
     {panel === 'saved' && <aside className="saved-panel">
       <button className="close-panel" onClick={() => setPanel('')}>Close</button><h2>Your places</h2>

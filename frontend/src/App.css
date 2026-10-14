@@ -9,6 +9,11 @@
 .account-actions .quiet-button { background: transparent; border-color: #71887f; color: white; }
 .notice { position: fixed; z-index: 1500; top: 74px; left: 50%; transform: translateX(-50%); max-width: min(600px, 90vw); padding: 10px 14px; border-radius: 10px; color: #173b31; background: #eef6df; box-shadow: 0 8px 24px #0002; }
 .notice button { border: 0; background: transparent; font-size: 20px; margin-left: 12px; cursor: pointer; }
+.toast { position: fixed; z-index: 5000; top: 78px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; width: max-content; max-width: min(560px, calc(100vw - 32px)); box-sizing: border-box; padding: 12px 16px; border: 1px solid transparent; border-radius: 10px; box-shadow: 0 8px 28px #0003; font-size: 14px; animation: toast-enter 160ms ease-out; }
+.toast-success { color: #155b3f; background: #eaf7ef; border-color: #b9e4ca; }
+.toast-error { color: #8a2525; background: #fff0ef; border-color: #f2c2bd; }
+.toast button { flex: 0 0 auto; border: 0; padding: 0 2px; color: inherit; background: transparent; font-size: 20px; line-height: 1; cursor: pointer; }
+@keyframes toast-enter { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .saved-panel { position: fixed; z-index: 1400; right: 12px; top: 76px; width: min(390px, calc(100vw - 24px)); max-height: calc(100vh - 90px); overflow: auto; box-sizing: border-box; padding: 20px; background: #fff; border: 1px solid #e3e9e5; border-radius: 16px; box-shadow: 0 12px 40px #152c2433; }
 .saved-panel h2 { margin: 0 0 14px; }.saved-panel h3 { font-size: 14px; margin: 22px 0 8px; color: #53645c; }
 .close-panel { float: right; border: 0; background: #f0f3f1; border-radius: 7px; padding: 6px 9px; cursor: pointer; }
