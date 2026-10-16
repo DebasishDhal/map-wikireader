@@ -592,7 +592,7 @@ def public_list(list_id: str, conn=Depends(db)):
             raise HTTPException(404, "Public list not found")
         # Publishing a list makes its included locations visible through this share link.
         # Select only fields used by the shared map; do not expose owner-only fields.
-        cur.execute("SELECT locations.id,locations.latitude,locations.longitude,locations.title,locations.description,list_locations.position,list_locations.note AS list_note FROM list_locations JOIN locations ON locations.id=list_locations.location_id WHERE list_locations.list_id=%s ORDER BY list_locations.position NULLS LAST,list_locations.added_at", (list_id,))
+        cur.execute("SELECT locations.id,locations.latitude,locations.longitude,locations.title,locations.description,locations.wikipedia_page_id,list_locations.position,list_locations.note AS list_note FROM list_locations JOIN locations ON locations.id=list_locations.location_id WHERE list_locations.list_id=%s ORDER BY list_locations.position NULLS LAST,list_locations.added_at", (list_id,))
         result["locations"] = cur.fetchall()
         return result
 

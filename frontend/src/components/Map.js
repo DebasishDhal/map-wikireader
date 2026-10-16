@@ -102,6 +102,8 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
     const [explorationMarkers, setExplorationMarkers] = useState([]);
     const [explorationPreview, setExplorationPreview] = useState(null);
     const explorationPreviewRequest = useRef(0);
+    const [sharedSummaries, setSharedSummaries] = useState({});
+    const sharedSummaryRequests = useRef(new Set());
     const [explorationSidebarOpen, setExplorationSidebarOpen] = useState(false);
     const [shouldZoom, setShouldZoom] = useState(false);
     const [zoomDelaySeconds, setZoomDelaySeconds] = useState(3); // Default zoom delay in seconds
@@ -314,6 +316,23 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
             }
         }
     }, []);
+
+    const loadSharedSummary = useCallback(async (place) => {
+        const pageId = place.wikipedia_page_id;
+        if (!pageId || sharedSummaries[pageId] || sharedSummaryRequests.current.has(pageId)) return;
+        sharedSummaryRequests.current.add(pageId);
+        setSharedSummaries((summaries) => ({ ...summaries, [pageId]: { loading: true } }));
+        try {
+            const response = await fetch(`${BACKEND_URL}/wiki/page-summary/${pageId}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Could not load the Wikipedia summary.');
+            setSharedSummaries((summaries) => ({ ...summaries, [pageId]: { text: data.extract } }));
+        } catch (error) {
+            setSharedSummaries((summaries) => ({ ...summaries, [pageId]: { error: error.message } }));
+        } finally {
+            sharedSummaryRequests.current.delete(pageId);
+        }
+    }, [sharedSummaries]);
 
     const handleDistanceClick = useCallback(async (lat, lon) => {
         const updatedPoints = [...geoPoints, { lat, lon }];
@@ -786,10 +805,21 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                         </Marker>
                     )}
                     {sharedLocations.map((place) => (
-                        <Marker key={place.id} position={[place.latitude, place.longitude]}>
+                        <Marker key={place.id} position={[place.latitude, place.longitude]} eventHandlers={{ click: () => loadSharedSummary(place) }}>
                             <Popup>
-                                <strong>{place.title}</strong>
-                                {(place.list_note || place.description) && <p><strong>List creator&apos;s note:</strong> {place.list_note || place.description}</p>}
+                                <div className="shared-marker-popup">
+                                    <strong>{place.title}</strong>
+                                    <section>
+                                        <b>List creator&apos;s note</b>
+                                        <p>{place.list_note || place.description || 'No note was added.'}</p>
+                                    </section>
+                                    <section>
+                                        <b>Wikipedia summary</b>
+                                        <div className="shared-wikipedia-summary" aria-live="polite">
+                                            {!place.wikipedia_page_id ? 'Summary unavailable.' : sharedSummaries[place.wikipedia_page_id]?.loading ? 'Loading summary…' : sharedSummaries[place.wikipedia_page_id]?.error || sharedSummaries[place.wikipedia_page_id]?.text || 'Loading summary…'}
+                                        </div>
+                                    </section>
+                                </div>
                             </Popup>
                         </Marker>
                     ))}
