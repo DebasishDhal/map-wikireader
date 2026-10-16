@@ -498,7 +498,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                             {wikiContent?.latitude != null && wikiContent?.longitude != null && (
                                 <div style={{ display: 'flex', gap: 6, margin: '10px 0' }}><input aria-label="Location note" placeholder="Add a personal note" value={locationNote} onChange={(e) => setLocationNote(e.target.value)} />
                                 <button onClick={() => onSaveLocation?.({ title: wikiContent.title, latitude: wikiContent.latitude,
-                                    longitude: wikiContent.longitude, description: locationNote || wikiContent.content,
+                                    longitude: wikiContent.longitude, description: locationNote.trim() || null,
                                     wikipedia_page_id: wikiContent.wikipedia_page_id })} disabled={!isSignedIn}
                                     title={isSignedIn ? 'Save this place' : 'Sign in to save places'}>
                                     Save place
@@ -789,8 +789,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                         <Marker key={place.id} position={[place.latitude, place.longitude]}>
                             <Popup>
                                 <strong>{place.title}</strong>
-                                {place.list_note && <p><strong>List creator&apos;s note:</strong> {place.list_note}</p>}
-                                {place.description && <p>{place.description}</p>}
+                                {(place.list_note || place.description) && <p><strong>List creator&apos;s note:</strong> {place.list_note || place.description}</p>}
                             </Popup>
                         </Marker>
                     ))}
