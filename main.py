@@ -396,6 +396,31 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
         except Exception as e:
             return JSONResponse(content={"error": str(e)}, status_code=500)
 
+@app.get("/wiki/page-summary/{page_id}")
+async def get_wiki_page_summary(page_id: int):
+    """Fetch a short plain-text extract for a Wikipedia page by its page ID."""
+    url = "https://en.wikipedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "prop": "extracts",
+        "exintro": 1,
+        "explaintext": 1,
+        "pageids": page_id,
+        "format": "json",
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, headers=HEADERS, timeout=10)
+        if response.status_code != 200:
+            raise HTTPException(502, "Could not fetch this Wikipedia page")
+        pages = response.json().get("query", {}).get("pages", {})
+        page = pages.get(str(page_id))
+        if not page or page.get("missing") is not None:
+            raise HTTPException(404, "Wikipedia page not found")
+        return {"page_id": page_id, "title": page.get("title"), "extract": page.get("extract") or "No summary is available for this page."}
+    except httpx.RequestError:
+        raise HTTPException(502, "Could not contact Wikipedia")
+
 @app.get("/random")
 def random():
     url = "https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=54.163337|37.561109&gsradius=10000&gslimit=10&format=json"

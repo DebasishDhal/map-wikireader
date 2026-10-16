@@ -100,6 +100,8 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
     const [explorationRadius, setExplorationRadius] = useState(10);
     const [explorationLimit, setExplorationLimit] = useState(10);
     const [explorationMarkers, setExplorationMarkers] = useState([]);
+    const [explorationPreview, setExplorationPreview] = useState(null);
+    const explorationPreviewRequest = useRef(0);
     const [explorationSidebarOpen, setExplorationSidebarOpen] = useState(false);
     const [shouldZoom, setShouldZoom] = useState(false);
     const [zoomDelaySeconds, setZoomDelaySeconds] = useState(3); // Default zoom delay in seconds
@@ -270,7 +272,8 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                 const markers = data.pages.map(page => ({
                     position: [page.lat, page.lon],
                     title: page.title,
-                    distance: page.dist
+                    distance: page.dist,
+                    pageId: page.pageid
                 }));
                 // setExplorationMarkers(markers);
                 // Now adding the main clicked point
@@ -293,6 +296,24 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
         }
         
     }, [explorationRadius, explorationLimit, setExplorationMarkers, setShouldZoom]);
+
+    const loadExplorationPreview = useCallback(async (marker) => {
+        if (!marker.pageId) return;
+        const requestId = ++explorationPreviewRequest.current;
+        setExplorationPreview({ pageId: marker.pageId, loading: true, extract: '', error: '' });
+        try {
+            const response = await fetch(`${BACKEND_URL}/wiki/page-summary/${marker.pageId}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Could not load this Wikipedia summary.');
+            if (requestId === explorationPreviewRequest.current) {
+                setExplorationPreview({ pageId: marker.pageId, loading: false, extract: data.extract, error: '' });
+            }
+        } catch (error) {
+            if (requestId === explorationPreviewRequest.current) {
+                setExplorationPreview({ pageId: marker.pageId, loading: false, extract: '', error: error.message });
+            }
+        }
+    }, []);
 
     const handleDistanceClick = useCallback(async (lat, lon) => {
         const updatedPoints = [...geoPoints, { lat, lon }];
@@ -775,6 +796,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                         <Marker 
                             key={`exploration-${index}`}
                             position={marker.position}
+                            eventHandlers={!marker.isClickedPoint ? { click: () => loadExplorationPreview(marker) } : undefined}
                             icon={marker.isClickedPoint ? new L.Icon({
                                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
                                 shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
@@ -791,15 +813,20 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                                 shadowSize: [41, 41]
                             })}
                         >
-                            <Popup>
-                                <div>
-                                    <strong>{marker.title}</strong><br />
-                                    {!marker.isClickedPoint && (
-                                        <small>Distance: {marker.distance.toFixed(1)}m</small>
-                                    )}
-                                    {marker.isClickedPoint && (
-                                        <small>Pos: {marker.position[0].toFixed(4)}, {marker.position[1].toFixed(4)}</small>
-                                    )}
+                            <Popup minWidth={250} maxWidth={310}>
+                                <div className="exploration-marker-popup">
+                                    <strong>{marker.title}</strong>
+                                    {!marker.isClickedPoint && <>
+                                        <div className="exploration-summary-box" aria-live="polite">
+                                            {!marker.pageId ? <span>Wikipedia summary unavailable.</span> : explorationPreview?.pageId === marker.pageId ? (
+                                                explorationPreview.loading ? <span>Loading Wikipedia summary…</span> :
+                                                explorationPreview.error ? <span>{explorationPreview.error}</span> :
+                                                <span>{explorationPreview.extract}</span>
+                                            ) : <span>Loading Wikipedia summary…</span>}
+                                        </div>
+                                        {Number.isFinite(marker.distance) && <small>Distance: {marker.distance.toFixed(1)}m</small>}
+                                    </>}
+                                    {marker.isClickedPoint && <small>Pos: {marker.position[0].toFixed(4)}, {marker.position[1].toFixed(4)}</small>}
                                 </div>
                             </Popup>
                         </Marker>
