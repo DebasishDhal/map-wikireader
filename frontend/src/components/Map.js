@@ -787,7 +787,11 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                     )}
                     {sharedLocations.map((place) => (
                         <Marker key={place.id} position={[place.latitude, place.longitude]}>
-                            <Popup><strong>{place.title}</strong><br />{place.description}</Popup>
+                            <Popup>
+                                <strong>{place.title}</strong>
+                                {place.list_note && <p><strong>List creator&apos;s note:</strong> {place.list_note}</p>}
+                                {place.description && <p>{place.description}</p>}
+                            </Popup>
                         </Marker>
                     ))}
 

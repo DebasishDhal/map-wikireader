@@ -234,7 +234,7 @@ function App() {
           const listLocations = (profile.locations || []).filter((place) => (place.list_ids || []).includes(list.id));
           return <section className="collection-card" key={list.id}>
             <div className="list-row"><strong>{list.name}{list.is_default ? ' · Favorites' : ''}</strong><span>{list.visibility}</span>
-              <button onClick={async () => { try { setSelectedList(await api(`/api/lists/${list.id}`)); } catch (e) { setNotice(e.message); } }}>Reorder</button>
+              <button onClick={async () => { try { setSelectedList(await api(`/api/lists/${list.id}`)); } catch (e) { setNotice(e.message); } }}>Manage</button>
               {!list.is_default && <select aria-label={`Visibility for ${list.name}`} value={list.visibility} onChange={async (e) => { try { await api(`/api/lists/${list.id}`, { method: 'PATCH', body: JSON.stringify({ name: list.name, description: list.description, visibility: e.target.value }) }); setProfile(await api('/api/me')); } catch (error) { setNotice(error.message); } }}><option value="private">Private</option><option value="public">Public</option></select>}
               {list.visibility === 'public' && <button onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/?list=${list.id}`); setNotice('Public collection link copied.'); }}>Share</button>}
             </div>
@@ -243,7 +243,19 @@ function App() {
         })}
         <form className="collection-form" onSubmit={createCollection}><h3>New collection</h3><input name="name" placeholder="Collection name" required/><input name="description" placeholder="Description"/><select name="visibility"><option value="private">Private</option><option value="public">Public</option></select><button>Create</button></form>
         <label className="visibility-choice">New saved locations <select value={visibility} onChange={(e) => setVisibility(e.target.value)}><option value="private">Private</option><option value="public">Public</option></select></label>
-        {selectedList && <section className="selected-list"><h3>{selectedList.name} · {selectedList.locations.length} places</h3>{selectedList.locations.map((place, index) => <div className="list-row" key={place.id}><span>{index + 1}. {place.title}</span><button disabled={index === 0} onClick={async () => { const ids = selectedList.locations.map((p) => p.id); [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]; await api(`/api/lists/${selectedList.id}/locations/order`, { method: 'PUT', body: JSON.stringify({ location_ids: ids }) }); setSelectedList(await api(`/api/lists/${selectedList.id}`)); }}>↑</button><button disabled={index === selectedList.locations.length - 1} onClick={async () => { const ids = selectedList.locations.map((p) => p.id); [ids[index], ids[index + 1]] = [ids[index + 1], ids[index]]; await api(`/api/lists/${selectedList.id}/locations/order`, { method: 'PUT', body: JSON.stringify({ location_ids: ids }) }); setSelectedList(await api(`/api/lists/${selectedList.id}`)); }}>↓</button><button onClick={async () => { await api(`/api/lists/${selectedList.id}/locations/${place.id}`, { method: 'DELETE' }); setSelectedList(await api(`/api/lists/${selectedList.id}`)); setProfile(await api('/api/me')); }}>Remove</button></div>)}</section>}
+        {selectedList && <section className="selected-list">
+          <h3>{selectedList.name} · {selectedList.locations.length} places</h3>
+          {selectedList.locations.map((place, index) => <div className="selected-list-item" key={place.id}>
+            <div className="list-row">
+              <strong>{index + 1}. {place.title}</strong>
+              <button disabled={index === 0} onClick={async () => { const ids = selectedList.locations.map((p) => p.id); [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]; await api(`/api/lists/${selectedList.id}/locations/order`, { method: 'PUT', body: JSON.stringify({ location_ids: ids }) }); setSelectedList(await api(`/api/lists/${selectedList.id}`)); }}>↑</button>
+              <button disabled={index === selectedList.locations.length - 1} onClick={async () => { const ids = selectedList.locations.map((p) => p.id); [ids[index], ids[index + 1]] = [ids[index + 1], ids[index]]; await api(`/api/lists/${selectedList.id}/locations/order`, { method: 'PUT', body: JSON.stringify({ location_ids: ids }) }); setSelectedList(await api(`/api/lists/${selectedList.id}`)); }}>↓</button>
+              <button onClick={async () => { await api(`/api/lists/${selectedList.id}/locations/${place.id}`, { method: 'DELETE' }); setSelectedList(await api(`/api/lists/${selectedList.id}`)); setProfile(await api('/api/me')); }}>Remove</button>
+            </div>
+            <textarea className="list-note-editor" aria-label={`Note for ${place.title} in ${selectedList.name}`} placeholder="Add a note for this collection" value={place.list_note || ''} onChange={(event) => setSelectedList((current) => ({ ...current, locations: current.locations.map((item) => item.id === place.id ? { ...item, list_note: event.target.value } : item) }))} />
+            <button className="save-list-note" onClick={async () => { try { await api(`/api/lists/${selectedList.id}/locations`, { method: 'POST', body: JSON.stringify({ location_id: place.id, note: place.list_note || '' }) }); setSelectedList(await api(`/api/lists/${selectedList.id}`)); showToast('List note saved.', 'success'); } catch (error) { showToast(error.message || 'Could not save the list note.', 'error'); } }}>Save note</button>
+          </div>)}
+        </section>}
         <h3>Saved locations</h3>{(profile.locations || []).map((place) => {
           const chosenListId = collectionChoices[place.id] || '';
           const alreadyInList = (place.list_ids || []).includes(chosenListId);
