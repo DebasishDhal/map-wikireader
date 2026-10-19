@@ -151,16 +151,29 @@ function App() {
 
   const findRandomPlace = async () => {
     setRandomLoading(true);
+    let lastError;
     try {
-      const response = await fetch(`${API}/random`);
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.detail || result.error || 'Could not find a random Wikipedia location.');
-      setContentType('summary');
-      setSubmittedQuery('');
-      setSearchQuery(result.title);
-      setRandomPlace(result);
-    } catch (error) {
-      showToast(error.message || 'Could not find a random Wikipedia location.', 'error');
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const response = await fetch(`${API}/random`);
+          const result = await response.json();
+          if (!response.ok) throw new Error(result?.detail || result?.error || 'Could not find a random Wikipedia location.');
+          if (!result || typeof result.title !== 'string' || !result.title.trim() ||
+              result.latitude == null || result.longitude == null ||
+              !Number.isFinite(Number(result.latitude)) || !Number.isFinite(Number(result.longitude)) || !result.extract) {
+            throw new Error('Wikipedia returned an incomplete random location.');
+          }
+          setContentType('summary');
+          setSubmittedQuery('');
+          setSearchQuery(result.title);
+          setRandomPlace(result);
+          return;
+        } catch (error) {
+          lastError = error;
+          if (attempt < 3) await new Promise((resolve) => window.setTimeout(resolve, attempt * 500));
+        }
+      }
+      showToast(lastError?.message || 'Could not find a random Wikipedia location after 3 attempts.', 'error');
     } finally {
       setRandomLoading(false);
     }

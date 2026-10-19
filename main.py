@@ -437,7 +437,7 @@ async def random_wikipedia_location():
                         "list": "geosearch",
                         "gscoord": f"{latitude}|{longitude}",
                         "gsradius": 10000,
-                        "gslimit": 50,
+                        "gslimit": 1,
                         "format": "json",
                     }, headers=HEADERS, timeout=8)
                 except httpx.RequestError:
