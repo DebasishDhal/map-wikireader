@@ -59,7 +59,7 @@ const SharedListBounds = ({ locations }) => {
     }, [locations, map]);
     return null;
 };
-const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmittedQuery, onSaveLocation, onSearchResults, isSignedIn, sharedLocations = [] } ) => {
+const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmittedQuery, onSaveLocation, onSearchResults, isSignedIn, sharedLocations = [], randomPlace } ) => {
     const [baseLayer, setBaseLayer] = useState("base"); // "base" | "satellite"
 
     const [markerPosition, setMarkerPosition] = useState(null);
@@ -246,6 +246,20 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
             fetchWiki(searchQuery);
         }
     }, [searchQuery, fetchWiki]);
+
+    useEffect(() => {
+        if (!randomPlace) return;
+        setWikiContent({
+            title: randomPlace.title,
+            content: randomPlace.extract,
+            latitude: randomPlace.latitude,
+            longitude: randomPlace.longitude,
+            wikipedia_page_id: randomPlace.page_id,
+        });
+        setMarkerPosition([randomPlace.latitude, randomPlace.longitude]);
+        setLocationNote('');
+        setIframeSrc('');
+    }, [randomPlace]);
 
     const togglePanel = () => {
         setPanelSize(prev => {

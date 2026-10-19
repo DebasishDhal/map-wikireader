@@ -18,6 +18,8 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [contentType, setContentType] = useState('summary');
+  const [randomPlace, setRandomPlace] = useState(null);
+  const [randomLoading, setRandomLoading] = useState(false);
   const [session, setSession] = useState(readSession);
   const [profile, setProfile] = useState(null);
   const [panel, setPanel] = useState('');
@@ -147,6 +149,23 @@ function App() {
     }
   };
 
+  const findRandomPlace = async () => {
+    setRandomLoading(true);
+    try {
+      const response = await fetch(`${API}/random`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || result.error || 'Could not find a random Wikipedia location.');
+      setContentType('summary');
+      setSubmittedQuery('');
+      setSearchQuery(result.title);
+      setRandomPlace(result);
+    } catch (error) {
+      showToast(error.message || 'Could not find a random Wikipedia location.', 'error');
+    } finally {
+      setRandomLoading(false);
+    }
+  };
+
   const saveLocation = async (place) => {
     if (!session) { showToast('Sign in to save locations.', 'error'); return; }
     let location;
@@ -217,6 +236,7 @@ function App() {
           <option value="summary">Summary</option><option value="full">Full Content</option>
         </select>
         <button type="submit">Search</button>
+        <button type="button" onClick={findRandomPlace} disabled={randomLoading}>{randomLoading ? 'Finding…' : 'Random place'}</button>
       </form>
       {session ? <div className="account-actions"><span>{profile?.user?.display_name || profile?.user?.email || 'Signed in'}</span>
         <button onClick={() => setPanel(panel ? '' : 'saved')}>My places</button><button className="quiet-button" onClick={signOut}>Sign out</button></div>
@@ -272,7 +292,7 @@ function App() {
       </>}
     </aside>}
     <WikiMap onMapClick={() => {}} searchQuery={submittedQuery} contentType={contentType} setSearchQuery={setSearchQuery} setSubmittedQuery={setSubmittedQuery}
-      onSaveLocation={saveLocation} onSearchResults={updateSearchCount} isSignedIn={!!session} sharedLocations={sharedLocations} />
+      onSaveLocation={saveLocation} onSearchResults={updateSearchCount} isSignedIn={!!session} sharedLocations={sharedLocations} randomPlace={randomPlace} />
   </div>;
 }
 

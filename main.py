@@ -10,7 +10,8 @@ import geopy.distance
 from cachetools import TTLCache
 import os
 from dotenv import dotenv_values
-from random import sample
+from random import sample, random as random_float
+from math import asin, degrees
 from backend.utils import generate_circle_centers, fetch_url, if_page_belongs_to_theme
 from mangum import Mangum
 from backend.logger.logger_setup import normal_logger as logger
@@ -422,31 +423,46 @@ async def get_wiki_page_summary(page_id: int):
         raise HTTPException(502, "Could not contact Wikipedia")
 
 @app.get("/random")
-def random():
-    url = "https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=54.163337|37.561109&gsradius=10000&gslimit=10&format=json"
-    response = requests.get(url, timeout=10, headers=HEADERS)
+async def random_wikipedia_location():
+    """Pick a random point on Earth and return a nearby geotagged Wikipedia page."""
+    url = "https://en.wikipedia.org/w/api.php"
+    try:
+        async with httpx.AsyncClient() as client:
+            for _ in range(12):
+                latitude = degrees(asin(2 * random_float() - 1))
+                longitude = random_float() * 360 - 180
+                try:
+                    response = await client.get(url, params={
+                        "action": "query",
+                        "list": "geosearch",
+                        "gscoord": f"{latitude}|{longitude}",
+                        "gsradius": 10000,
+                        "gslimit": 50,
+                        "format": "json",
+                    }, headers=HEADERS, timeout=8)
+                except httpx.RequestError:
+                    continue
+                if response.status_code != 200:
+                    continue
+                pages = response.json().get("query", {}).get("geosearch", [])
+                if not pages:
+                    continue
+                page = sample(pages, 1)[0]
+                try:
+                    summary = await get_wiki_page_summary(int(page["pageid"]))
+                except (KeyError, ValueError, HTTPException):
+                    continue
+                return {
+                    "page_id": page["pageid"],
+                    "title": page["title"],
+                    "latitude": page["lat"],
+                    "longitude": page["lon"],
+                    "extract": summary["extract"],
+                }
 
-    if response.status_code != 200:
-        return JSONResponse(
-            content={"error": "Failed to fetch random page"},
-            status_code=500
-        )
-    data = response.json()
-    pages = data.get("query", {}).get("geosearch", [])
-    if not pages:
-        return JSONResponse(
-            content={"error": "No pages found"},
-            status_code=404
-        )
-     
-    return JSONResponse(
-        content={
-            "pages": pages,
-            "count": len(pages),
-            # "urls": frontend_urls
-        },
-        status_code=200
-    )
+    except Exception as e:
+        logger.exception(f"Error finding a random Wikipedia location")
+        raise HTTPException(503, "Could not find a random Wikipedia location. Please try again.")
 
 
 @app.get("/api/me")
