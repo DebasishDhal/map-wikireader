@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -7,6 +8,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 from backend.app_config.logger_config import MAX_VERBOSITY
 
 class RelativePathFormatter(logging.Formatter):
+    # Use the process's local timezone (configured in Docker Compose with TZ).
+    converter = time.localtime
+
     def format(self, record):
         try:
             record.relpath = str(Path(record.pathname).resolve().relative_to(PROJECT_ROOT))
@@ -67,7 +71,7 @@ def setup_logger(
     # Common formatting for console and file
     log_format = RelativePathFormatter(
         fmt="%(asctime)s - %(name)s - %(levelname)s - pid=%(process)d - %(relpath)s:%(lineno)d - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt="%Y-%m-%d %H:%M:%S %Z"
     )
 
     # --- 1. Terminal (Stream) Handler ---

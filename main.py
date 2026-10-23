@@ -468,43 +468,84 @@ async def get_wiki_page_summary(page_id: int):
 @app.get("/random")
 async def random_wikipedia_location():
     """Pick a random point on Earth and return a nearby geotagged Wikipedia page."""
-    url = "https://en.wikipedia.org/w/api.php"
+    outcomes = {
+        "geosearch_error": 0,
+        "upstream_error": 0,
+        "invalid_response": 0,
+        "no_page": 0,
+        "summary_error": 0,
+        "incomplete_page": 0,
+    }
+    last_fields = {
+        "geosearch_page": False,
+        "pageid": False,
+        "title": False,
+        "latitude": False,
+        "longitude": False,
+        "summary": False,
+        "summary_title": False,
+        "summary_extract": False,
+    }
     try:
         async with httpx.AsyncClient() as client:
-            for attempt in range(1, 13):
+            for attempt in range(1, 26):
                 latitude = degrees(asin(2 * random_float() - 1))
                 longitude = random_float() * 360 - 180
+                url = (
+                    "https://en.wikipedia.org/w/api.php?action=query"
+                    "&list=geosearch"
+                    f"&gscoord={latitude}|{longitude}"
+                    "&gsradius=10000"
+                    "&gslimit=1"
+                    "&format=json"
+                )
                 try:
-                    response = await client.get(url, params={
-                        "action": "query",
-                        "list": "geosearch",
-                        "gscoord": f"{latitude}|{longitude}",
-                        "gsradius": 10000,
-                        "gslimit": 1,
-                        "format": "json",
-                    }, headers=HEADERS, timeout=8)
+                    response = await client.get(url, headers=HEADERS, timeout=10)
                 except httpx.RequestError:
-                    logger.warning("Random Wikipedia lookup attempt %d/12 failed during geosearch", attempt, exc_info=True)
+                    outcomes["geosearch_error"] += 1
                     continue
                 if response.status_code != 200:
-                    logger.warning("Random Wikipedia lookup attempt %d/12 returned upstream status %s", attempt, response.status_code)
+                    outcomes["upstream_error"] += 1
                     continue
                 try:
-                    pages = response.json().get("query", {}).get("geosearch", [])
+                    response_data = response.json()
+                    pages = response_data.get("query", {}).get("geosearch", [])
                 except (ValueError, AttributeError):
-                    logger.warning("Random Wikipedia lookup attempt %d/12 returned invalid geosearch JSON", attempt, exc_info=True)
+                    outcomes["invalid_response"] += 1
                     continue
                 if not pages:
+                    outcomes["no_page"] += 1
+                    last_fields = {field: False for field in last_fields}
                     continue
                 page = sample(pages, 1)[0]
+                if not isinstance(page, dict):
+                    outcomes["invalid_response"] += 1
+                    last_fields = {field: False for field in last_fields}
+                    continue
+                summary = None
                 try:
                     summary = await get_wiki_page_summary(int(page["pageid"]))
                 except (KeyError, ValueError, HTTPException):
-                    logger.warning("Random Wikipedia lookup attempt %d/12 could not load summary for page=%r", attempt, page.get("pageid"), exc_info=True)
+                    outcomes["summary_error"] += 1
+                has_summary = isinstance(summary, dict)
+                last_fields = {
+                    "geosearch_page": True,
+                    "pageid": bool(page.get("pageid")),
+                    "title": bool(page.get("title")),
+                    "latitude": page.get("lat") is not None,
+                    "longitude": page.get("lon") is not None,
+                    "summary": has_summary,
+                    "summary_title": bool(summary.get("title")) if has_summary else False,
+                    "summary_extract": bool(summary.get("extract")) if has_summary else False,
+                }
+                if not all(last_fields.values()):
+                    outcomes["incomplete_page"] += 1
                     continue
-                if not summary or not summary.get("title"):
-                    logger.warning("Random Wikipedia lookup attempt %d/12 got an empty summary for page=%r", attempt, page.get("pageid"))
-                    continue
+                logger.info(
+                    "Random Wikipedia lookup succeeded after %d attempt(s); candidate fields: %s",
+                    attempt,
+                    "; ".join(f"{field}={'yes' if present else 'no'}" for field, present in last_fields.items()),
+                )
                 return {
                     "page_id": page["pageid"],
                     "title": page["title"],
@@ -515,7 +556,14 @@ async def random_wikipedia_location():
 
     except Exception:
         logger.exception("Random Wikipedia location lookup crashed")
-        raise HTTPException(503, "Could not find a random Wikipedia location. Please try again.")
+        return JSONResponse(content={"error": "Could not find a random Wikipedia location. Please try again."}, status_code=503)
+
+    logger.warning(
+        "Random Wikipedia lookup failed after 25 attempts; outcomes=%s; final candidate fields: %s",
+        outcomes,
+        "; ".join(f"{field}={'yes' if present else 'no'}" for field, present in last_fields.items()),
+    )
+    return JSONResponse(content={"error": "Could not find a random Wikipedia location. Please try again."}, status_code=503)
 
 
 @app.get("/api/me")

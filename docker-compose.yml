@@ -10,6 +10,7 @@ services:
       - .:/app
     environment:
       MODE: ${MODE:-development}
+      TZ: ${TZ:-Asia/Kolkata}
 
   frontend:
     build:
