@@ -1,5 +1,6 @@
 import math
 import httpx, asyncio
+from backend.logger.logger_setup import normal_logger as logger
 
 def generate_circle_centers(center_lat, center_lon, radius_km, small_radius_km=10):
     """
@@ -66,6 +67,7 @@ async def fetch_url(client: httpx.AsyncClient, url: str):
             "data": response.json() if response.status_code == 200 else None,
         }
     except Exception as e:
+        logger.exception("Wikipedia geosearch request failed url=%s", url)
         return {"url": url, "error": str(e)}
     
 

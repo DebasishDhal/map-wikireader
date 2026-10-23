@@ -1,6 +1,5 @@
 """Neon persistence and Cognito bearer-token authentication."""
 import os
-import logging
 from functools import lru_cache
 from typing import Optional
 
@@ -9,16 +8,20 @@ import psycopg2
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg2.extras import Json, RealDictCursor
+from backend.logger.logger_setup import normal_logger as logger
 
 bearer = HTTPBearer(auto_error=False)
-logger = logging.getLogger(__name__)
 
 
 def db():
     url = os.getenv("POSTGRES_DB_URL")
     if not url:
         raise HTTPException(503, "Database is not configured")
-    conn = psycopg2.connect(url, cursor_factory=RealDictCursor)
+    try:
+        conn = psycopg2.connect(url, cursor_factory=RealDictCursor)
+    except Exception:
+        logger.exception("Postgres connection failed")
+        raise HTTPException(503, "Could not connect to the database") from None
     try:
         yield conn
     finally:
@@ -45,7 +48,7 @@ def current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(b
             raise ValueError("ID token audience does not match COGNITO_CLIENT_ID")
     except Exception as error:
         # Log the validation reason for diagnosis, but never log the bearer token.
-        logger.warning("Cognito ID-token validation failed (%s): %s", type(error).__name__, error)
+        logger.warning("Cognito ID-token validation failed (%s): %s", type(error).__name__, error, exc_info=True)
         raise HTTPException(401, "Your session is invalid or expired")
     with conn.cursor() as cur:
         cur.execute('''INSERT INTO users (cognitor_sub,email,display_name) VALUES (%s,%s,%s)

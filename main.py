@@ -1,10 +1,15 @@
 from fastapi import FastAPI, BackgroundTasks, Request, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from fastapi.openapi.docs import get_swagger_ui_html
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
 import requests, httpx, asyncio
+import traceback
+from pathlib import Path
 from geopy.geocoders import Nominatim
 import geopy.distance
 from cachetools import TTLCache
@@ -127,6 +132,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def _failure_source(error):
+    """Return the first application source frame that raised an exception."""
+    for frame in reversed(traceback.extract_tb(error.__traceback__)):
+        if frame.name in {"log_http_error", "log_unhandled_error"}:
+            continue
+        try:
+            source = Path(frame.filename).resolve().relative_to(Path(__file__).resolve().parent)
+        except ValueError:
+            continue
+        return f"{source}:{frame.lineno} in {frame.name}()"
+    return "application source unavailable"
+
+
+@app.exception_handler(StarletteHTTPException)
+async def log_http_error(request: Request, error: StarletteHTTPException):
+    source = _failure_source(error)
+    detail = error.detail if isinstance(error.detail, str) else repr(error.detail)
+    message = "HTTP %s %s %s source=%s detail=%s"
+    arguments = (error.status_code, request.method, request.url.path, source, detail)
+    if error.status_code >= 500:
+        logger.error(message, *arguments, exc_info=(type(error), error, error.__traceback__))
+    else:
+        logger.warning(message, *arguments)
+    return JSONResponse(status_code=error.status_code, content=jsonable_encoder({"detail": error.detail}), headers=error.headers)
+
+
+@app.exception_handler(RequestValidationError)
+async def log_request_validation_error(request: Request, error: RequestValidationError):
+    fields = [{"field": ".".join(map(str, item.get("loc", ()))), "message": item.get("msg"), "type": item.get("type")}
+              for item in error.errors()]
+    logger.warning("Request validation failed: %s %s fields=%s", request.method, request.url.path, fields)
+    return JSONResponse(status_code=422, content=jsonable_encoder({"detail": error.errors()}))
+
+
+@app.exception_handler(Exception)
+async def log_unhandled_error(request: Request, error: Exception):
+    source = _failure_source(error)
+    logger.error("Unhandled request error: %s %s source=%s", request.method, request.url.path, source,
+                 exc_info=(type(error), error, error.__traceback__))
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 BACKEND_WIKI_CACHE_TTL = int(os.getenv("BACKEND_WIKI_CACHE_TTL"+"_"+mode, 300))
 summary_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)  # ttl time in seconds, then cache expires
 full_page_cache = TTLCache(maxsize=100, ttl=BACKEND_WIKI_CACHE_TTL)
@@ -189,13 +236,11 @@ async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundT
             response = await client.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{summary_page_name}", timeout=10, headers=HEADERS)
 
         if response.status_code != 200:
-            return JSONResponse(
-                content={"error": "Page not found"},
-                status_code=404
-            )
+            raise HTTPException(404, "Wikipedia page not found")
         try:
             coords = loc.geocode(summary_page_name, timeout=5)
-        except Exception as e:
+        except Exception:
+            logger.warning("Wikipedia summary geocoding failed for page=%r", summary_page_name, exc_info=True)
             coords = None
         
         result = {
@@ -213,11 +258,11 @@ async def get_wiki_summary(summary_page_name: str, background_tasks: BackgroundT
             content= result,
             status_code=200
         )
-    except Exception as e:
-        return JSONResponse(
-            content={"error": str(e), 'response': str(response)},
-            status_code=500
-        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Wikipedia summary request failed for page=%r", summary_page_name)
+        return JSONResponse(content={"error": "Could not retrieve Wikipedia summary"}, status_code=502)
 
 @app.get("/wiki/search/full/{full_page}")
 async def search_wiki_full_page(full_page: str, background_tasks: BackgroundTasks):
@@ -235,13 +280,11 @@ async def search_wiki_full_page(full_page: str, background_tasks: BackgroundTask
         response = await client.get(f"https://en.wikipedia.org/wiki/{full_page}", timeout=10, headers=HEADERS)
     try:
         if response.status_code != 200:
-            return JSONResponse(
-                content={"error": "Page not found"},
-                status_code=404
-            )
+            raise HTTPException(404, "Wikipedia page not found")
         try:
             coords = loc.geocode(full_page, timeout=5)
-        except Exception as e:
+        except Exception:
+            logger.warning("Wikipedia page geocoding failed for page=%r", full_page, exc_info=True)
             coords = None
 
         result = {
@@ -258,11 +301,11 @@ async def search_wiki_full_page(full_page: str, background_tasks: BackgroundTask
             status_code=200
         )
     
-    except Exception as e:
-        return JSONResponse(
-            content={"error": str(e), 'response': str(response)},
-            status_code=500
-        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Wikipedia full-page request failed for page=%r", full_page)
+        return JSONResponse(content={"error": "Could not retrieve Wikipedia page"}, status_code=502)
 
 
 @app.post("/geodistance")
@@ -282,16 +325,13 @@ def get_geodistance(payload: Geodistance):
         elif unit == "mi":
             distance = distance_km * 0.621371
         else:
-            return JSONResponse(
-                content={"error": "Invalid unit"},
-                status_code=400
-            )
+            raise HTTPException(400, "Invalid distance unit; use 'km' or 'mi'")
         
-    except Exception as e:
-        return JSONResponse(
-            content={"error": str(e)},
-            status_code=500
-        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Geodistance calculation failed for coordinates=%s,%s to %s,%s unit=%r", lat1, lon1, lat2, lon2, unit)
+        return JSONResponse(content={"error": "Could not calculate distance"}, status_code=500)
     return JSONResponse(
         content={
             "distance": distance,
@@ -335,7 +375,8 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=HEADERS, timeout=10)
             if response.status_code != 200:
-                return JSONResponse(content={"error": "Failed to fetch nearby pages"}, status_code=500)
+                logger.error("Wikipedia nearby search failed: upstream_status=%s center=%s,%s radius_m=%s", response.status_code, lat_center, lon_center, radius)
+                return JSONResponse(content={"error": "Could not fetch nearby Wikipedia pages"}, status_code=502)
             data = response.json()
             pages = data.get("query", {}).get("geosearch", [])
             if theme:
@@ -349,8 +390,9 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
                 from random import sample
                 pages = sample(pages, limit)
             return JSONResponse(content={"pages": pages, "count": len(pages)}, status_code=200)
-        except Exception as e:
-            return JSONResponse(content={"error": str(e)}, status_code=500)
+        except Exception:
+            logger.exception("Nearby Wikipedia search failed center=%s,%s radius_m=%s", lat_center, lon_center, radius)
+            return JSONResponse(content={"error": "Could not fetch nearby Wikipedia pages"}, status_code=502)
     else:
         # radius > wiki_geosearch_radius_limit_meters
         all_pages = []
@@ -394,8 +436,9 @@ async def get_nearby_wiki_pages(payload: NearbyWikiPage):
                 from random import sample
                 final_results = sample(final_results, limit)
             return JSONResponse(content={"pages": final_results, "count": len(final_results)}, status_code=200)
-        except Exception as e:
-            return JSONResponse(content={"error": str(e)}, status_code=500)
+        except Exception:
+            logger.exception("Large-radius nearby search failed center=%s,%s radius_m=%s", lat_center, lon_center, radius)
+            return JSONResponse(content={"error": "Could not fetch nearby Wikipedia pages"}, status_code=502)
 
 @app.get("/wiki/page-summary/{page_id}")
 async def get_wiki_page_summary(page_id: int):
@@ -428,7 +471,7 @@ async def random_wikipedia_location():
     url = "https://en.wikipedia.org/w/api.php"
     try:
         async with httpx.AsyncClient() as client:
-            for _ in range(12):
+            for attempt in range(1, 13):
                 latitude = degrees(asin(2 * random_float() - 1))
                 longitude = random_float() * 360 - 180
                 try:
@@ -441,16 +484,26 @@ async def random_wikipedia_location():
                         "format": "json",
                     }, headers=HEADERS, timeout=8)
                 except httpx.RequestError:
+                    logger.warning("Random Wikipedia lookup attempt %d/12 failed during geosearch", attempt, exc_info=True)
                     continue
                 if response.status_code != 200:
+                    logger.warning("Random Wikipedia lookup attempt %d/12 returned upstream status %s", attempt, response.status_code)
                     continue
-                pages = response.json().get("query", {}).get("geosearch", [])
+                try:
+                    pages = response.json().get("query", {}).get("geosearch", [])
+                except (ValueError, AttributeError):
+                    logger.warning("Random Wikipedia lookup attempt %d/12 returned invalid geosearch JSON", attempt, exc_info=True)
+                    continue
                 if not pages:
                     continue
                 page = sample(pages, 1)[0]
                 try:
                     summary = await get_wiki_page_summary(int(page["pageid"]))
                 except (KeyError, ValueError, HTTPException):
+                    logger.warning("Random Wikipedia lookup attempt %d/12 could not load summary for page=%r", attempt, page.get("pageid"), exc_info=True)
+                    continue
+                if not summary or not summary.get("title"):
+                    logger.warning("Random Wikipedia lookup attempt %d/12 got an empty summary for page=%r", attempt, page.get("pageid"))
                     continue
                 return {
                     "page_id": page["pageid"],
@@ -460,8 +513,8 @@ async def random_wikipedia_location():
                     "extract": summary["extract"],
                 }
 
-    except Exception as e:
-        logger.exception(f"Error finding a random Wikipedia location")
+    except Exception:
+        logger.exception("Random Wikipedia location lookup crashed")
         raise HTTPException(503, "Could not find a random Wikipedia location. Please try again.")
 
 
