@@ -20,6 +20,9 @@ function App() {
   const [contentType, setContentType] = useState('summary');
   const [randomPlace, setRandomPlace] = useState(null);
   const [randomLoading, setRandomLoading] = useState(false);
+  const [randomAverage, setRandomAverage] = useState(null);
+  const [displayedAverage, setDisplayedAverage] = useState(null);
+  const [averageLoading, setAverageLoading] = useState(false);
   const [session, setSession] = useState(readSession);
   const [profile, setProfile] = useState(null);
   const [panel, setPanel] = useState('');
@@ -46,7 +49,10 @@ function App() {
       headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}),
         ...(session?.idToken ? { Authorization: `Bearer ${session.idToken}` } : {}), ...options.headers },
     });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'Request failed');
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || error.error || 'Request failed');
+    }
     return response.json();
   }, [session]);
 
@@ -85,12 +91,18 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!session?.idToken) { setProfile(null); return; }
+    if (!session?.idToken) {
+      setProfile(null);
+      setRandomAverage(null);
+      setDisplayedAverage(null);
+      return;
+    }
     api('/api/me').then(setProfile).catch((error) => {
       setNotice(error.message);
       sessionStorage.removeItem(AUTH_KEY);
       setSession(null);
     });
+    api('/api/random-locations/average').then(setRandomAverage).catch((error) => setNotice(error.message));
   }, [api, session?.idToken]);
 
   useEffect(() => {
@@ -155,13 +167,23 @@ function App() {
     try {
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         try {
-          const response = await fetch(`${API}/random`);
-          const result = await response.json();
-          if (!response.ok) throw new Error(result?.detail || result?.error || 'Could not find a random Wikipedia location.');
+          const result = await api('/random');
           if (!result || typeof result.title !== 'string' || !result.title.trim() ||
               result.latitude == null || result.longitude == null ||
               !Number.isFinite(Number(result.latitude)) || !Number.isFinite(Number(result.longitude)) || !result.extract) {
             throw new Error('Wikipedia returned an incomplete random location.');
+          }
+          if (session?.idToken) {
+            try {
+              await api('/api/random-locations', { method: 'POST', body: JSON.stringify(result) });
+              const average = await api('/api/random-locations/average');
+              setRandomAverage(average);
+              setDisplayedAverage((current) => current
+                ? (average.latitude != null && average.longitude != null ? average : null)
+                : current);
+            } catch (error) {
+              showToast(`Random place shown, but could not save it to history: ${error.message}`, 'error');
+            }
           }
           setContentType('summary');
           setSubmittedQuery('');
@@ -176,6 +198,28 @@ function App() {
       showToast(lastError?.message || 'Could not find a random Wikipedia location after 3 attempts.', 'error');
     } finally {
       setRandomLoading(false);
+    }
+  };
+
+  const showRandomAverage = async () => {
+    setAverageLoading(true);
+    try {
+      const average = await api('/api/random-locations/average');
+      setRandomAverage(average);
+      if (!average.count) {
+        showToast('Get a random place while signed in to build your average location.', 'error');
+        return;
+      }
+      if (average.latitude == null || average.longitude == null) {
+        showToast('A stable average cannot be calculated from these locations.', 'error');
+        return;
+      }
+      setDisplayedAverage(average);
+      setPanel('');
+    } catch (error) {
+      showToast(`Could not load your random-location average: ${error.message}`, 'error');
+    } finally {
+      setAverageLoading(false);
     }
   };
 
@@ -300,12 +344,21 @@ function App() {
             <button disabled={!chosenListId} onClick={() => toggleLocationInList(place, chosenListId)}>{alreadyInList ? 'Remove' : 'Add'}</button>
           </div>;
         })}
+        <section className="random-average-card">
+          <h3>Random location average</h3>
+          <p>{!randomAverage?.count ? 'No random locations saved yet.' : randomAverage.latitude == null || randomAverage.longitude == null
+            ? `A stable average could not be calculated from ${randomAverage.count} locations.`
+            : `Based on ${randomAverage.count} random ${randomAverage.count === 1 ? 'location' : 'locations'}.`}</p>
+          <button disabled={averageLoading || !randomAverage?.count || randomAverage.latitude == null || randomAverage.longitude == null} onClick={showRandomAverage}>
+            {averageLoading ? 'Loading…' : 'Show average on map'}
+          </button>
+        </section>
         <h3>Recent searches</h3>{(profile.searches || []).map((s) => <button className="history-row" key={s.id} onClick={() => { setSearchQuery(s.query); setSubmittedQuery(s.query); setPanel(''); }}>{s.query}<small>{new Date(s.created_at).toLocaleString()}</small></button>)}
         <h3>Activity</h3>{(profile.activities || []).slice(0, 12).map((a) => <p className="activity-row" key={a.id}>{a.activity_type.replaceAll('_', ' ')} <small>{new Date(a.created_at).toLocaleString()}</small></p>)}
       </>}
     </aside>}
     <WikiMap onMapClick={() => {}} searchQuery={submittedQuery} contentType={contentType} setSearchQuery={setSearchQuery} setSubmittedQuery={setSubmittedQuery}
-      onSaveLocation={saveLocation} onSearchResults={updateSearchCount} isSignedIn={!!session} sharedLocations={sharedLocations} randomPlace={randomPlace} />
+      onSaveLocation={saveLocation} onSearchResults={updateSearchCount} isSignedIn={!!session} sharedLocations={sharedLocations} randomPlace={randomPlace} averageLocation={displayedAverage} />
   </div>;
 }
 

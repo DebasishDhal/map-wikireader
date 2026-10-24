@@ -16,7 +16,7 @@ from cachetools import TTLCache
 import os
 from dotenv import dotenv_values
 from random import sample, random as random_float
-from math import asin, degrees
+from math import asin, atan2, cos, degrees, radians, sin, sqrt
 from backend.utils import generate_circle_centers, fetch_url, if_page_belongs_to_theme
 from mangum import Mangum
 from backend.logger.logger_setup import normal_logger as logger
@@ -118,6 +118,17 @@ class ListItemRecord(BaseModel):
 
 class ReorderRecord(BaseModel):
     location_ids: list[str]
+
+class RandomLocationRecord(BaseModel):
+    page_id: int = Field(..., gt=0)
+    title: str
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    extract: Optional[str] = None
+    search_latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    search_longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    radius_m: int = Field(default=10000, gt=0)
+    attempts: int = Field(default=1, gt=0)
 
 class CognitoCodeExchange(BaseModel):
     code: str
@@ -552,6 +563,10 @@ async def random_wikipedia_location():
                     "latitude": page["lat"],
                     "longitude": page["lon"],
                     "extract": summary["extract"],
+                    "search_latitude": latitude,
+                    "search_longitude": longitude,
+                    "radius_m": 10000,
+                    "attempts": attempt,
                 }
 
     except Exception:
@@ -564,6 +579,57 @@ async def random_wikipedia_location():
         "; ".join(f"{field}={'yes' if present else 'no'}" for field, present in last_fields.items()),
     )
     return JSONResponse(content={"error": "Could not find a random Wikipedia location. Please try again."}, status_code=503)
+
+
+@app.post("/api/random-locations")
+def save_random_location(record: RandomLocationRecord, user=Depends(current_user), conn=Depends(db)):
+    """Save a successful random Wikipedia result for the signed-in user."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO random_location_history
+               (user_id,wikipedia_page_id,title,latitude,longitude,summary,
+                search_latitude,search_longitude,radius_m,attempts)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+            (user["id"], record.page_id, record.title, record.latitude, record.longitude,
+             record.extract, record.search_latitude, record.search_longitude,
+             record.radius_m, record.attempts),
+        )
+        history_item = cur.fetchone()
+        record_activity(conn, user["id"], "random_location", {
+            "page_id": record.page_id,
+            "title": record.title,
+        })
+    conn.commit()
+    return history_item
+
+
+@app.get("/api/random-locations/average")
+def get_random_location_average(user=Depends(current_user), conn=Depends(db)):
+    """Return this user's spherical mean of successful random locations."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT count(*) AS location_count,
+                      avg(cos(radians(latitude)) * cos(radians(longitude))) AS x,
+                      avg(cos(radians(latitude)) * sin(radians(longitude))) AS y,
+                      avg(sin(radians(latitude))) AS z
+               FROM random_location_history WHERE user_id=%s""",
+            (user["id"],),
+        )
+        row = cur.fetchone()
+
+    count = row["location_count"]
+    x, y, z = row["x"], row["y"], row["z"]
+    if not count or x is None or y is None or z is None:
+        return {"count": 0, "latitude": None, "longitude": None}
+
+    horizontal = sqrt(x * x + y * y)
+    if sqrt(horizontal * horizontal + z * z) < 1e-12:
+        return {"count": count, "latitude": None, "longitude": None}
+    return {
+        "count": count,
+        "latitude": degrees(atan2(z, horizontal)),
+        "longitude": degrees(atan2(y, x)),
+    }
 
 
 @app.get("/api/me")

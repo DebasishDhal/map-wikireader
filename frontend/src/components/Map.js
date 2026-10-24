@@ -24,6 +24,13 @@ L.Icon.Default.mergeOptions({
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+const averageLocationIcon = L.divIcon({
+    className: 'average-location-icon',
+    html: '<span></span>',
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+});
+
 const maxExplorationLimit = 50; // kilometers, the maximum amount user can select to explore.
 
 const ClickHandler = ({ onClick }) => {
@@ -59,7 +66,7 @@ const SharedListBounds = ({ locations }) => {
     }, [locations, map]);
     return null;
 };
-const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmittedQuery, onSaveLocation, onSearchResults, isSignedIn, sharedLocations = [], randomPlace } ) => {
+const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSubmittedQuery, onSaveLocation, onSearchResults, isSignedIn, sharedLocations = [], randomPlace, averageLocation } ) => {
     const [baseLayer, setBaseLayer] = useState("base"); // "base" | "satellite"
 
     const [markerPosition, setMarkerPosition] = useState(null);
@@ -689,7 +696,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                     </button>
                 )}
                 <MapContainer
-                    center={markerPosition || [0, 0]} // Default center if no marker position
+                    center={averageLocation ? [averageLocation.latitude, averageLocation.longitude] : markerPosition || [0, 0]} // Default center if no marker position
                     zoom={2.5} //Originally 2
                     style={{ height: '100%', width: '100%' }}
                     minZoom={2}
@@ -705,7 +712,7 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
 
                     <ResizeHandler trigger={wikiWidth} />
                     <CenterMap 
-                        position={markerPosition}
+                        position={averageLocation ? [averageLocation.latitude, averageLocation.longitude] : markerPosition}
                         coordinates={explorationMarkers.map((marker) => marker.position)}
                         shouldZoom={shouldZoom}
                         setShouldZoom={setShouldZoom}
@@ -816,6 +823,17 @@ const WikiMap = ( { onMapClick, searchQuery, contentType, setSearchQuery, setSub
                                 )}
                             </Popup>
                             )}
+                        </Marker>
+                    )}
+                    {averageLocation && (
+                        <Marker position={[averageLocation.latitude, averageLocation.longitude]} icon={averageLocationIcon}>
+                            <Popup>
+                                <div className="random-average-popup">
+                                    <strong>Your average random location</strong>
+                                    <span>Calculated from {averageLocation.count} {averageLocation.count === 1 ? 'location' : 'locations'}.</span>
+                                    <small>{Number(averageLocation.latitude).toFixed(4)}, {Number(averageLocation.longitude).toFixed(4)}</small>
+                                </div>
+                            </Popup>
                         </Marker>
                     )}
                     {sharedLocations.map((place) => (
